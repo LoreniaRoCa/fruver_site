@@ -1,0 +1,19 @@
+﻿;
+; Archive created at 2026-07-17 13:20:56
+;     dbname: postgres
+;     TOC Entries: 744
+;     Compression: gzip
+;     Dump Version: 1.16-0
+;     Format: CUSTOM
+;     Integer: 4 bytes
+;     Offset: 8 bytes
+;     Dumped from database version: 17.6
+;     Dumped by pg_dump version: 17.6
+;
+;
+; Selected TOC Entries:
+;
+369; 1259 18372 VIEW public vista_dashboard_departamentos postgres
+367; 1259 18229 VIEW public vista_empleado_competencias postgres
+368; 1259 18283 VIEW public vista_evaluaciones postgres
+373; 1259 18639 VIEW public vista_resumen_evaluaciones postgres

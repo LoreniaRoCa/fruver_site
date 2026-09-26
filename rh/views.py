@@ -3,6 +3,7 @@
 # ==========================================
 import openpyxl  
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side  
+from django.contrib.auth.views import LoginView
 from django.core.mail import send_mail
 from django.db.models import Avg, Q 
 from django.shortcuts import render, redirect, get_object_or_404
@@ -19,10 +20,27 @@ from django.contrib.auth import logout
 # 💡 INCLUSIÓN: Importamos el nuevo modelo de la tabla intermedia
 from .models import (
     Empleado, CompetenciaClasificacion, Competencia, Evaluacion, 
-    EvaluacionDet, EvaluacionComentario, EmpleadoCompetenciaAsignada, TokenAccesoEvaluacion
+    EvaluacionDet, EvaluacionComentario, EmpleadoCompetenciaAsignada, TokenAccesoEvaluacion, Empresa
 )
 from django.db import connection
 from django.utils import timezone
+
+
+class CustomAdminLoginView(LoginView):
+    template_name = "admin/login.html"
+
+    # 1. Enviamos el catálogo de empresas a la plantilla
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['empresas_disponibles'] = Empresa.objects.filter(activa=True)
+        return context
+
+    # 2. Al validar las credenciales del usuario, guardamos la empresa en la sesión
+    def form_valid(self, form):
+        empresa_id = self.request.POST.get('empresa_id')
+        if empresa_id:
+            self.request.session['empresa_id'] = empresa_id
+        return super().form_valid(form)
 
 def cerrar_sesion_view(request):
     """Cierra la sesión activa del usuario y limpia las cookies."""
@@ -39,11 +57,15 @@ def redireccionar_segun_rol(request):
 
 @login_required
 def panel_evaluacion_view(request, subordinado_id=None):
+    empresa_activa = request.session.get('empresa_activa') or request.session.get('empresa_id')
     try:
         usuario_logueado = Empleado.objects.get(user=request.user)
     except Empleado.DoesNotExist:
-        messages.error(request, "Tu usuario no está vinculado a un registro de Empleado.")
-        return redirect('admin:index')
+        if request.user.is_superuser:
+            # Si es admin sin perfil de empleado, enviar al panel de administración nativo de Django
+            return redirect('/admin/rh/empleado/') 
+        messages.error(request, "Tu usuario no está vinculado a ningún registro de Empleado.")
+        return redirect('cerrar_sesion')
 
     evaluacion_activa = Evaluacion.objects.filter().last()
     if not evaluacion_activa:
@@ -55,8 +77,14 @@ def panel_evaluacion_view(request, subordinado_id=None):
     tipo_forzado = request.GET.get('tipo')  # 'E' (Autoevaluación) o 'J' (Evaluación Jefe)
 
     if subordinado_id:
-        empleado_a_evaluar = get_object_or_404(Empleado, id_empleado=subordinado_id)
-        # CORRECCIÓN CLAVE: Si es modo consulta de Autoevaluación ('E'), forzamos es_autoevaluacion a True
+        # 🌟 CORRECCIÓN AQUÍ: Filtrar id_empleado Y la empresa activa
+        filtros_empleado = {'id_empleado': subordinado_id}
+        if empresa_activa:
+            filtros_empleado['empresa_id'] = empresa_activa  # Usa 'empresa' o 'empresa_id' según la FK en tu modelo Empleado
+
+        empleado_a_evaluar = get_object_or_404(Empleado, **filtros_empleado)
+
+        # Si es modo consulta de Autoevaluación ('E'), forzamos es_autoevaluacion a True
         if modo_consulta and tipo_forzado == 'E':
             es_autoevaluacion = True
         else:
@@ -133,11 +161,12 @@ def panel_evaluacion_view(request, subordinado_id=None):
     
     # Añadimos el filtro 'se_evalua=True' a la consulta inicial
     equipo = Empleado.objects.filter(
-        id_jefe_id=usuario_logueado.id_empleado,
+        id_jefe=usuario_logueado,  # Ajusta 'id_jefe' según el nombre exacto de tu ForeignKey
         se_evalua=True
     ).exclude(id_empleado=usuario_logueado.id_empleado)
     
     for miembro in equipo:
+        # Verificamos si el jefe logueado ya envió la evaluación ('J') para este miembro
         ya_evaluado_por_jefe = EvaluacionDet.objects.filter(
             id_evaluacion=evaluacion_activa,
             id_empleado=miembro,
@@ -148,6 +177,7 @@ def panel_evaluacion_view(request, subordinado_id=None):
             'empleado': miembro,
             'estatus': 'Contestado' if ya_evaluado_por_jefe else 'Pendiente'
         })
+
     subordinados_pendientes.sort(key=lambda x: (x['estatus'] != 'Pendiente', x['empleado'].nombre_largo))
     # =========================================================================
     # 3. CONSTRUCCIÓN DE LA ESTRUCTURA PARA EL HTML
@@ -230,6 +260,9 @@ def guardar_evaluacion_view(request):
         else:
             tipo_evaluador = 'J'
 
+        # Obtenemos la empresa del empleado evaluado (o de la evaluación activa)
+        empresa_obj = evaluado.empresa or evaluacion_activa.empresa
+
         # 1. GUARDAR RETROALIMENTACIÓN DE COMPETENCIAS GENERALES
         fortalezas_gen = request.POST.get("fortalezas_generales", "").strip()
         oportunidades_gen = request.POST.get("oportunidades_generales", "").strip()
@@ -241,7 +274,8 @@ def guardar_evaluacion_view(request):
             tipo_evaluador=tipo_evaluador,
             defaults={
                 'fortalezas': Exam_clean_text(fortalezas_gen),
-                'areas_oportunidad': Exam_clean_text(oportunidades_gen)
+                'areas_oportunidad': Exam_clean_text(oportunidades_gen),
+                'empresa': empresa_obj  # <-- Se asigna la empresa
             }
         )
 
@@ -256,7 +290,8 @@ def guardar_evaluacion_view(request):
             tipo_evaluador=tipo_evaluador,
             defaults={
                 'fortalezas': Exam_clean_text(fortalezas_esp),
-                'areas_oportunidad': Exam_clean_text(oportunidades_esp)
+                'areas_oportunidad': Exam_clean_text(oportunidades_esp),
+                'empresa': empresa_obj  # <-- Se asigna la empresa
             }
         )
 
@@ -271,7 +306,10 @@ def guardar_evaluacion_view(request):
                     id_empleado=evaluado,
                     id_competencia=competencia,
                     tipo=tipo_evaluador,
-                    defaults={'calificacion': int(value)} 
+                    defaults={
+                        'calificacion': int(value),
+                        'empresa': empresa_obj  # <-- También previene errores similares en EvaluacionDet
+                    } 
                 )
 
         nombre_evaluacion = evaluacion_activa.descripcion if evaluacion_activa.descripcion else "Evaluación de Desempeño"
@@ -296,6 +334,8 @@ def resumen_evaluaciones_view(request):
         messages.error(request, "Tu usuario no está vinculado a un registro de Empleado.")
         return redirect('admin:index')
 
+    empresa_activa = request.session.get('empresa_activa') or request.session.get('empresa_id')
+
     # Consulta directa con la columna 'evaluacion' integrada desde Supabase
     query = """
         SELECT 
@@ -306,8 +346,10 @@ def resumen_evaluaciones_view(request):
             eval_esp,
             evaluacion,
             id_empleado,
-            Departamento
+            Departamento,
+            id
         FROM rh_vista_resumen_evaluaciones
+        WHERE   empresa = %s
         ORDER BY nombre_largo ASC;
     """
 
@@ -315,7 +357,7 @@ def resumen_evaluaciones_view(request):
     nombre_evaluacion = "Evaluación"  # Valor por defecto
 
     with connection.cursor() as cursor:
-        cursor.execute(query)
+        cursor.execute(query, [empresa_activa])
         rows = cursor.fetchall()
 
         for row in rows:
@@ -380,6 +422,7 @@ def resumen_evaluaciones_view(request):
                 'gratificacion': gratificacion,
                 'id_empleado': id_empleado,
                 'departamento': departamento,
+                'id': id,
             })
 
     context = {
@@ -444,6 +487,8 @@ def exportar_resumen_excel(request):
     # 1. Traer el texto de la barra de búsqueda si el usuario filtró en pantalla
     buscar_texto = request.GET.get('q', '').strip().lower()
 
+    empresa_activa = request.session.get('empresa_activa') or request.session.get('empresa_id')
+
     # 2. Ejecutar la CONSULTA REAL que sí existe en tu Supabase (vista_resumen_evaluaciones)
     query = """
         SELECT 
@@ -455,6 +500,7 @@ def exportar_resumen_excel(request):
             evaluacion,
             departamento
         FROM rh_vista_resumen_evaluaciones
+        WHERE  empresa = %s
         ORDER BY nombre_largo ASC;
     """
 
@@ -462,7 +508,7 @@ def exportar_resumen_excel(request):
     nombre_evaluacion = "Consolidado de Resultados"
 
     with connection.cursor() as cursor:
-        cursor.execute(query)
+        cursor.execute(query, [empresa_activa])
         rows = cursor.fetchall()
 
         for row in rows:
@@ -635,6 +681,8 @@ def exportar_detalle_competencias_excel(request):
     id_periodo = request.GET.get('periodo_id')
     buscar_texto = request.GET.get('q', '').strip().lower()
 
+    empresa_activa = request.session.get('empresa_activa') or request.session.get('empresa_id')
+
     # Si entran por primera vez, emular la lógica por defecto (traer la última evaluación)
     if not id_periodo:
         ultima_eval = Evaluacion.objects.filter().last()
@@ -663,12 +711,12 @@ def exportar_detalle_competencias_excel(request):
                 evaluacion,
                 autoevaluacion
             FROM rh_vista_evaluaciones
-            WHERE id_evaluacion = %s
+            WHERE id_evaluacion = %s AND empresa = %s
             ORDER BY nombre_largo ASC, clasificacion ASC, competencia ASC;
         """
 
         with connection.cursor() as cursor:
-            cursor.execute(query, [id_periodo])
+            cursor.execute(query, [id_periodo, empresa_activa])
             rows = cursor.fetchall()
 
             for row in rows:
@@ -808,12 +856,15 @@ def asignacion_competencias_view(request):
     listado_departamentos = []
     listado_clasificaciones = []
     
+    empresa_activa = request.session.get('empresa_activa') or request.session.get('empresa_id')
+
     with connection.cursor() as cursor:
-        cursor.execute("SELECT DISTINCT departamento FROM rh_vista_empleado_competencias WHERE departamento IS NOT NULL ORDER BY departamento;")
+        cursor.execute("SELECT DISTINCT departamento FROM rh_vista_empleado_competencias WHERE departamento IS NOT NULL AND empresa = %s ORDER BY departamento;", [empresa_activa])
         listado_departamentos = [r[0] for r in cursor.fetchall()]
         
-        cursor.execute("SELECT DISTINCT clasificacion FROM rh_vista_empleado_competencias WHERE clasificacion IS NOT NULL ORDER BY clasificacion;")
+        cursor.execute("SELECT DISTINCT clasificacion FROM rh_vista_empleado_competencias WHERE clasificacion IS NOT NULL AND empresa = %s ORDER BY clasificacion;", [empresa_activa])
         listado_clasificaciones = [r[0] for r in cursor.fetchall()]
+
 
     # 3. Construcción del Query Principal Dinámico con filtros WHERE
     base_query = """
@@ -824,9 +875,14 @@ def asignacion_competencias_view(request):
             clasificacion,
             competencia
         FROM rh_vista_empleado_competencias
-        WHERE 1=1
+        WHERE   1 = 1
     """
     params = []
+
+    # 🌟 NUEVO: Aplicar SIEMPRE el filtro por Empresa Activa
+    if empresa_activa:
+        base_query += " AND empresa = %s"
+        params.append(empresa_activa)
 
     # Aplicar filtro de búsqueda general (Nombre o Competencia)
     if search_query:
@@ -882,6 +938,8 @@ def exportar_competencias_excel(request):
     filter_dept = request.GET.get('departamento', '').strip()
     filter_clasif = request.GET.get('clasificacion', '').strip()
 
+    empresa_activa = request.session.get('empresa_activa') or request.session.get('empresa_id')
+
     # 2. Construir la consulta SQL dinámica con los filtros
     base_query = """
         SELECT 
@@ -894,6 +952,11 @@ def exportar_competencias_excel(request):
         WHERE 1=1
     """
     params = []
+
+    # 🌟 NUEVO: Aplicar SIEMPRE el filtro por Empresa Activa
+    if empresa_activa:
+        base_query += " AND empresa = %s"
+        params.append(empresa_activa)
 
     if search_query:
         base_query += " AND (nombre ILIKE %s OR competencia ILIKE %s)"

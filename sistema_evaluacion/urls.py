@@ -19,13 +19,14 @@ from django.urls import path
 from django.views.generic import RedirectView
 from rh import views  # <-- ESTA ES LA LÍNEA MÁGICA QUE FALTABA
 from rh.admin import admin_site, procesar_evaluaciones_loading_view
-from rh.views import probar_correo_view
+from rh.views import probar_correo_view, CustomAdminLoginView
 urlpatterns = [
     path('', RedirectView.as_view(url='admin/', permanent=False)),
     path('redireccionar-login/', views.redireccionar_segun_rol, name='redireccionar_login'),
     path('probar-correo/', probar_correo_view, name='probar_correo'),
     
     # --- Rutas de reportes y utilidades ---
+    path('admin/login/', CustomAdminLoginView.as_view(), name='login'),
     path('admin/descargar-plantilla/<str:model_name>/', views.descargar_plantilla_excel, name='descargar_plantilla'),
     path('evaluaciones/asignacion-competencias/exportar/', views.exportar_competencias_excel, name='exportar_competencias_excel'),
     path('admin/resumen-evaluaciones/excel-detalle/', views.exportar_detalle_competencias_excel, name='exportar_detalle_competencias_excel'),    

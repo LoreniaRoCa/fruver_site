@@ -21,6 +21,7 @@ from django.db.models import Q
 from unfold.admin import ModelAdmin
 from unfold.forms import ActionForm
 
+
 class CustomActionForm(ActionForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -40,6 +41,10 @@ class CustomAdminSite(UnfoldAdminSite):
     index_template = "admin/index.html"
 
     def index(self, request, extra_context=None):
+
+        # 1. Obtener la empresa activa de la sesión
+        empresa_activa = request.session.get('empresa_activa') or request.session.get('empresa_id')
+        
         extra_context = extra_context or {}
         
         departamentos_dict = {}
@@ -50,17 +55,20 @@ class CustomAdminSite(UnfoldAdminSite):
         total_auto_global = 0
         total_jefe_global = 0
 
+
         with connection.cursor() as cursor:
             cursor.execute("""
-                SELECT 
-                    departamento, 
-                    jefe, 
-                    numempleados, 
-                    autoevaluados, 
-                    evaluados,
-                    ambas  
-                FROM rh_vista_dashboard_departamentos
-            """)
+                    SELECT 
+                        departamento, 
+                        jefe, 
+                        numempleados, 
+                        autoevaluados, 
+                        evaluados,
+                        ambas  
+                    FROM rh_vista_dashboard_departamentos
+                    WHERE empresa = %s
+                """, [empresa_activa])
+
             rows = cursor.fetchall()
             
             for row in rows:
@@ -238,7 +246,7 @@ class ExcelImportAdmin(ModelAdmin):
     # 🌟 APLICADO GLOBALMENTE: Todos los catálogos heredarán esto automáticamente
     action_form = CustomActionForm
     action_submit_label = "Ejecutar"
-   
+    
     model_class = None       
     pk_field_name = None     
     excel_columns = []       
@@ -246,7 +254,7 @@ class ExcelImportAdmin(ModelAdmin):
     list_per_page = 25
     list_select_related = True
 
-    # 1. MANTENIDO: Generador de URLs para los botones del template personalizado
+    # 1. Generador de URLs para los botones del template personalizado
     def changelist_view(self, request, extra_context=None):
         extra_context = extra_context or {}
         
@@ -255,7 +263,6 @@ class ExcelImportAdmin(ModelAdmin):
             model_name = self.model._meta.model_name
             query_string = request.GET.urlencode()
             
-            # Apunta al get_urls interno del Admin
             url_exportar = f"/admin/{app_label}/{model_name}/exportar-excel/"
             if query_string:
                 url_exportar += f"?{query_string}"
@@ -264,7 +271,7 @@ class ExcelImportAdmin(ModelAdmin):
             
         return super().changelist_view(request, extra_context=extra_context)
 
-    # 2. MANTENIDO: Tus botones de acción rápidos (Editar/Eliminar)
+    # 2. Botones de acción rápidos (Editar/Eliminar)
     def acciones_rh(self, obj):
         app_label = obj._meta.app_label
         model_name = obj._meta.model_name
@@ -290,7 +297,7 @@ class ExcelImportAdmin(ModelAdmin):
         )
     acciones_rh.short_description = "Acciones"
 
-    # 3. ACTUALIZADO: Registra tanto tu importador original como el nuevo exportador
+    # 3. Registra rutas de importación y exportación
     def get_urls(self):
         urls = super().get_urls()
         if not self.model:
@@ -300,13 +307,11 @@ class ExcelImportAdmin(ModelAdmin):
         model_name = self.model._meta.model_name
 
         custom_urls = [
-            # Tu ruta de importación original
             path(
                 'importar-excel/', 
                 self.admin_site.admin_view(self.import_excel_view), 
                 name=f'{app_label}_{model_name}_import_excel'
             ),
-            # La nueva ruta segura de exportación integrada
             path(
                 'exportar-excel/', 
                 self.admin_site.admin_view(self.exportar_catalogo_view), 
@@ -315,10 +320,12 @@ class ExcelImportAdmin(ModelAdmin):
         ]
         return custom_urls + urls
 
-    # 4. MANTENIDO AL 100%: Tu motor original de procesamiento de carga masiva
+    # 4. Motor de procesamiento de carga masiva multitenant
+    # 4. Motor de procesamiento de carga masiva multitenant con mapeo de catálogos
     def import_excel_view(self, request):
         if request.method == "POST":
             excel_file = request.FILES.get("excel_file")
+            empresa_activa_id = request.session.get('empresa_id')
             
             if not excel_file:
                 messages.error(request, "Por favor, selecciona un archivo válido.")
@@ -362,6 +369,39 @@ class ExcelImportAdmin(ModelAdmin):
                                 val = val.strip()
                             data[col_name] = val
 
+                    # 🌟 ASIGNACIÓN AUTOMÁTICA DE LA EMPRESA ACTIVA
+                    if hasattr(self.model_class, 'empresa') and empresa_activa_id:
+                        data['empresa_id'] = empresa_activa_id
+                        data.pop('empresa', None)  # Previene conflicto con ForeignKeys de texto
+
+                    # 🌟 TRADUCCIÓN DE IDs EXTERNOS PARA PUESTO Y DEPARTAMENTO (EN EMPLEADO)
+                    if self.model_class == Empleado and empresa_activa_id:
+                        # 1. Resolver Puesto
+                        puesto_ext = data.pop('id_puesto', None) or data.pop('id_puesto_id', None)
+                        if puesto_ext:
+                            puesto_obj = Puesto.objects.filter(
+                                id_puesto=puesto_ext, 
+                                empresa_id=empresa_activa_id
+                            ).first()
+                            if puesto_obj:
+                                data['id_puesto_id'] = puesto_obj.id
+                            else:
+                                messages.warning(request, f"Fila {row_idx}: No se encontró el Puesto ID '{puesto_ext}' para esta empresa.")
+                                continue
+
+                        # 2. Resolver Departamento
+                        depto_ext = data.pop('id_departamento', None) or data.pop('id_departamento_id', None)
+                        if depto_ext:
+                            depto_obj = Departamento.objects.filter(
+                                id_departamento=depto_ext, 
+                                empresa_id=empresa_activa_id
+                            ).first()
+                            if depto_obj:
+                                data['id_departamento_id'] = depto_obj.id 
+                            else:
+                                messages.warning(request, f"Fila {row_idx}: No se encontró el Departamento ID '{depto_ext}' para esta empresa.")
+                                continue
+
                     pk_lower = self.pk_field_name.lower()
                     pk_idx = col_map.get(pk_lower) or col_map.get(pk_lower.removesuffix('_id')) or col_map.get(pk_lower + '_id')
                     pk_value = row[pk_idx] if pk_idx is not None and pk_idx < len(row) else None
@@ -378,9 +418,15 @@ class ExcelImportAdmin(ModelAdmin):
 
                     if pk_value:
                         try:
+                            # 🌟 BÚSQUEDA Y ACTUALIZACIÓN CONSIDERANDO LA COMBINACIÓN EMPRESA + ID_LOCAL
+                            filter_kwargs = {self.pk_field_name: pk_value}
+                            if hasattr(self.model_class, 'empresa') and empresa_activa_id:
+                                filter_kwargs['empresa_id'] = empresa_activa_id
+
                             defaults_data = {k: v for k, v in data.items() if k != self.pk_field_name}
+                            
                             instance, created = self.model_class.objects.update_or_create(
-                                **{self.pk_field_name: pk_value},
+                                **filter_kwargs,
                                 defaults=defaults_data
                             )
                             success_count += 1
@@ -402,7 +448,7 @@ class ExcelImportAdmin(ModelAdmin):
                 
         return redirect(f"/admin/{self.model_class._meta.app_label}/{self.model_class._meta.model_name}/")
 
-    # 5. NUEVO: Agregado al final sin pisar nada. Exporta la data en base a tus columnas mapeadas
+    # 5. Exportación del catálogo filtrado por la empresa seleccionada
     def exportar_catalogo_view(self, request):
         if not self.model:
             raise Http404("Modelo no configurado.")
@@ -411,12 +457,12 @@ class ExcelImportAdmin(ModelAdmin):
         ws = wb.active
         ws.title = f"Catálogo {self.model._meta.model_name.capitalize()}"
 
-        # Usa las columnas que tú definiste para armar la cabecera exacta de tu plantilla
         columnas = self.excel_columns if self.excel_columns else [field.name for field in self.model._meta.fields]
         ws.append(columnas)
 
-        # Rellenamos el reporte
-        queryset = self.model.objects.all()
+        # 🌟 UTILIZA get_queryset PARA DEDUCR SOLO LA DATA PERTINENTE A LA EMPRESA ACTIVA
+        queryset = self.get_queryset(request)
+        
         for objeto in queryset:
             fila = [getattr(objeto, col, "") for col in columnas]
             fila_limpia = [str(val) if val is not None else "" for val in fila]
@@ -430,6 +476,31 @@ class ExcelImportAdmin(ModelAdmin):
         return response
 
 
+class EmpresaFilterAdmin(ExcelImportAdmin):
+    """
+    Clase base que filtra la información según la empresa en sesión.
+    Si el registro tiene empresa=NULL se considera GENERAL y se muestra a todos.
+    """
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        empresa_activa = request.session.get('empresa_activa') or request.session.get('empresa_id')
+        
+        # Verifica si el modelo actual tiene la columna 'empresa' o 'empresa_id'
+        field_names = [f.name for f in self.model._meta.get_fields()]
+        
+        if empresa_activa:
+            if 'empresa' in field_names:
+                return qs.filter(empresa=empresa_activa)
+            elif 'empresa_id' in field_names:
+                return qs.filter(empresa_id=empresa_activa)
+                
+        return qs
+
+    def save_model(self, request, obj, form, change):
+        # Asigna automáticamente la empresa activa al crear un nuevo registro si no tiene una
+        if hasattr(obj, 'empresa') and not obj.empresa_id:
+            obj.empresa_id = request.session.get('empresa_id')
+        super().save_model(request, obj, form, change)
 # ==========================================
 #   INLINE: CLASIFICACIÓN POR PUESTO
 # ==========================================
@@ -680,7 +751,7 @@ class EmpleadoAdminForm(forms.ModelForm):
 #   REGISTRO DE CATÁLOGOS EN EL ADMINISTRADOR
 # =========================================================================
 
-class PuestoAdmin(ExcelImportAdmin):
+class PuestoAdmin(EmpresaFilterAdmin):
     model_class = Puesto
     pk_field_name = 'id_puesto'
     excel_columns = ['id_puesto', 'descripcion']
@@ -691,7 +762,7 @@ class PuestoAdmin(ExcelImportAdmin):
 #admin.site.register(Puesto, PuestoAdmin)
 admin_site.register(Puesto, PuestoAdmin)
 
-class DepartamentoAdmin(ExcelImportAdmin):
+class DepartamentoAdmin(EmpresaFilterAdmin):
     model_class = Departamento
     pk_field_name = 'id_departamento'
     excel_columns = ['id_departamento', 'descripcion']
@@ -749,7 +820,7 @@ def enviar_enlaces_magicos(modeladmin, request, queryset):
 
     # 4. Filtramos: que se evalúen O que sean jefes de alguien
     empleados_a_procesar = empleados_con_correo.filter(
-        Q(se_evalua=True) | Q(id_empleado__in=jefes_ids)
+        Q(se_evalua=True) | Q(id__in=jefes_ids)
     )
 
     if not empleados_a_procesar.exists():
@@ -761,7 +832,7 @@ def enviar_enlaces_magicos(modeladmin, request, queryset):
         return
 
     # 5. Guardamos la lista de IDs a procesar en la sesión para la pantalla de carga (Loading)
-    empleados_ids = list(empleados_a_procesar.values_list('id_empleado', flat=True).distinct())
+    empleados_ids = list(empleados_a_procesar.values_list('id', flat=True).distinct())
     
     session_key = f"envio_correos_{uuid.uuid4().hex}"
     request.session[session_key] = {
@@ -803,7 +874,7 @@ def enviar_enlaces_seleccionados(modeladmin, request, queryset):
         return
 
     # 3. Guardamos los IDs de los empleados seleccionados en la sesión
-    empleados_ids = list(empleados_a_procesar.values_list('id_empleado', flat=True).distinct())
+    empleados_ids = list(empleados_a_procesar.values_list('id', flat=True).distinct())
     
     session_key = f"envio_correos_{uuid.uuid4().hex}"
     request.session[session_key] = {
@@ -834,7 +905,7 @@ def procesar_evaluaciones_loading_view(request, session_key):
         
         for emp_id in lote:
             try:
-                empleado = Empleado.objects.get(id_empleado=emp_id)
+                empleado = Empleado.objects.get(id=emp_id)
                 token = TokenAccesoEvaluacion.objects.create(empleado=empleado)
                 url_acceso = f"{dominio_sitio}evaluacion/acceso/{token.id_token}/"
                 
@@ -951,16 +1022,49 @@ def procesar_evaluaciones_loading_view(request, session_key):
     </html>
     """
     return HttpResponse(html_content)
-
 #admin.site.register(Departamento, DepartamentoAdmin)
 admin_site.register(Departamento, DepartamentoAdmin)
-class EmpleadoAdmin(CatalogosOrdenadosAdmin, ExcelImportAdmin):
+
+
+class DepartamentoEmpresaFilter(admin.RelatedFieldListFilter):
+    def field_choices(self, field, request, model_admin):
+        empresa_activa = request.session.get('empresa_activa') or request.session.get('empresa_id')
+        if empresa_activa:
+            pk_field = field.remote_field.model._meta.pk.name
+            limit_choices_to = {
+                'empresa_id': empresa_activa
+            }
+            # Filtrar departamentos pertenecientes a la empresa activa
+            qs = field.remote_field.model.objects.filter(**limit_choices_to).order_by('descripcion')
+            return [(getattr(obj, pk_field), str(obj)) for obj in qs]
+        return super().field_choices(field, request, model_admin)
+
+class PuestoEmpresaFilter(admin.RelatedFieldListFilter):
+    def field_choices(self, field, request, model_admin):
+        empresa_activa = request.session.get('empresa_activa') or request.session.get('empresa_id')
+        if empresa_activa:
+            pk_field = field.remote_field.model._meta.pk.name
+            limit_choices_to = {
+                'empresa_id': empresa_activa
+            }
+            qs = field.remote_field.model.objects.filter(**limit_choices_to).order_by('descripcion')
+            return [(getattr(obj, pk_field), str(obj)) for obj in qs]
+        return super().field_choices(field, request, model_admin)
+class EmpleadoAdmin(CatalogosOrdenadosAdmin, EmpresaFilterAdmin):
     form = EmpleadoAdminForm  
     model_class = Empleado
     pk_field_name = 'id_empleado'
     excel_columns = ['id_empleado', 'nombre_largo', 'id_puesto_id', 'id_departamento_id', 'CorreoElectronico', 'estado_empleado', 'fechaalta', 'se_evalua']
     list_display = ('id_empleado', 'nombre_largo', 'id_puesto', 'id_departamento', 'id_jefe', 'es_jefe_departamento', 'CorreoElectronico', 'estado_empleado', 'fechaalta', 'se_evalua', 'acciones_rh')
-    list_filter = ('id_departamento', 'id_puesto', 'es_jefe_departamento', 'CorreoElectronico', 'id_jefe', 'estado_empleado', 'se_evalua', 'id_jefe__nombre_largo')
+    # 🌟 APLICAR FILTROS PERSONALIZADOS AQUÍ:
+    list_filter = (
+        ('id_departamento', DepartamentoEmpresaFilter),
+        ('id_puesto', PuestoEmpresaFilter),
+        'es_jefe_departamento', 
+        'CorreoElectronico', 
+        'estado_empleado', 
+        'se_evalua'
+    )
     search_fields = ('nombre_largo', 'id_puesto__descripcion', 'CorreoElectronico', 'id_jefe__nombre_largo')
 
 # 🌟 ÚNICA DEFINICIÓN:
@@ -1029,7 +1133,7 @@ class EmpleadoAdmin(CatalogosOrdenadosAdmin, ExcelImportAdmin):
 
                     matriz_html += f'''
                         <label class="flex items-center gap-4 bg-white dark:bg-zinc-800/40 hover:bg-gray-100 dark:hover:bg-zinc-800 px-4 py-3 rounded-md border border-gray-200 dark:border-zinc-800/80 cursor-pointer transition-all w-full block">
-                            <input type="checkbox" name="competencias_seleccionadas" value="{comp.id_competencia}" {checked_str} class="rounded border-gray-300 dark:border-zinc-700 text-blue-600 focus:ring-blue-500 h-4 w-4" style="accent-color: #3b82f6; min-width: 16px;">
+                            <input type="checkbox" name="competencias_check" value="{comp.id_competencia}" {checked_str} class="rounded border-gray-300 dark:border-zinc-700 text-blue-600 focus:ring-blue-500 h-4 w-4" style="accent-color: #3b82f6; min-width: 16px;">
                             <span class="text-gray-700 dark:text-zinc-300 text-sm font-normal leading-normal">{comp.descripcion}</span>
                         </label>
                     '''
@@ -1053,9 +1157,13 @@ class EmpleadoAdmin(CatalogosOrdenadosAdmin, ExcelImportAdmin):
         return super().change_view(request, object_id, form_url, extra_context=extra_context)
 
     def save_model(self, request, obj, form, change):
+
+        if not obj.empresa_id:
+            obj.empresa_id = request.session.get('empresa_id')
+
         super().save_model(request, obj, form, change)
         
-        competencias_post = request.POST.getlist('competencias_seleccionadas')
+        competencias_post = request.POST.getlist('competencias_check')
         competencias_post_ids = [int(pk) for pk in competencias_post if pk.isdigit()]
 
         # 1. Eliminar desmarcados
@@ -1093,7 +1201,7 @@ class CompetenciaAdmin(CatalogosOrdenadosAdmin, ExcelImportAdmin):
 admin_site.register(Competencia, CompetenciaAdmin)
 
 
-class EvaluacionAdmin(ExcelImportAdmin):
+class EvaluacionAdmin(EmpresaFilterAdmin):
     model_class = Evaluacion
     pk_field_name = 'id_evaluacion'
     excel_columns = ['descripcion', 'fecha_inicial', 'fecha_final']

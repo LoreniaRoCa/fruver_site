@@ -7,12 +7,13 @@ from pathlib import Path
 from django.urls import reverse_lazy
 
 import os
+import unfold
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Cargar el archivo .env ubicado junto a manage.py
-load_dotenv(os.path.join(BASE_DIR, '.env'))
+load_dotenv(os.path.join(BASE_DIR, '.env'), override=True)
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -108,7 +109,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware', 
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.locale.LocaleMiddleware', # Garantiza la traducción del Admin
     'django.middleware.common.CommonMiddleware',
@@ -152,6 +153,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'django.template.context_processors.i18n',
+                'rh.context_processors.empresa_activa',
             ],
         },
     },
@@ -197,13 +199,22 @@ USE_L10N = True # Activado para que traduzca componentes de interfaz de paquetes
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = '/static/'
 
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+# 🔴 Comentamos esta línea para eliminar el WARNING W004:
+# STATICFILES_DIRS = [ BASE_DIR / 'static' ]
+
+# 🟢 Le indicamos a Django la ubicación FÍSICA de Unfold sin duplicar:
 STATICFILES_DIRS = [
-    BASE_DIR / 'static',
+    os.path.join(os.path.dirname(unfold.__file__), 'static'),
 ]
 
-STATIC_ROOT = BASE_DIR / 'staticfiles'
-# Obligatorio para que WhiteNoise entregue los archivos estáticos en producción:
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+STATICFILES_FINDERS = [
+    'django.contrib.staticfiles.finders.FileSystemFinder',
+    'django.contrib.staticfiles.finders.AppDirectoriesFinder',
+]
+
 
 # Redirecciones tras autenticación
 #LOGIN_REDIRECT_URL = '/admin/'  # O la ruta principal de tu sistema

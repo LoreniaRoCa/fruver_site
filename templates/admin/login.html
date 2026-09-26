@@ -124,6 +124,27 @@
     .login input[type="submit"]:hover {
         background-color: #476b32 !important;
     }
+    .login select[name="empresa_id"] {
+        width: 100% !important;
+        height: 48px !important;
+        background-color: rgba(255, 255, 255, 0.9) !important;
+        border: 2px solid #5b893f !important;
+        border-radius: 12px !important;
+        padding-left: 48px !important;
+        padding-right: 16px !important;
+        font-size: 15px !important;
+        color: #2e441f !important;
+        outline: none !important;
+        cursor: pointer !important;
+        appearance: none !important; /* Quita la flecha nativa */
+        -webkit-appearance: none !important;
+    }
+
+    .login select[name="empresa_id"]:focus {
+        background-color: #ffffff !important;
+        border-color: #72a651 !important;
+        box-shadow: 0 0 0 4px rgba(114, 166, 81, 0.2) !important;
+    }    
 </style>
 {% endblock %}
 
@@ -149,7 +170,6 @@
         // 2. CREAR LA TARJETA CONTENEDORA FIJA
         const form = document.querySelector("form");
         if (form) {
-            // 🌟 ASEGURAR QUE EL FORMULARIO SIEMPRE APUNTE A /admin/login/
             form.setAttribute("action", "/admin/login/");
 
             const mainContainer = form.closest("main") || form.parentElement;
@@ -194,7 +214,7 @@
             }
         }
 
-        // 3. Modificar Inputs
+        // 3. Modificar Inputs de Usuario y Contraseña
         const usernameInput = document.querySelector("#id_username");
         const passwordInput = document.querySelector("#id_password");
         const submitBtn = document.querySelector("button[type='submit'], input[type='submit']");
@@ -228,6 +248,30 @@
                 `;
                 parent.insertBefore(wrapper, passwordInput);
                 wrapper.appendChild(passwordInput);
+            }
+        }
+
+        // 4. Inyectar Selector de Empresa justo arriba del campo Usuario
+        if (usernameInput) {
+            const userWrapper = usernameInput.closest(".input-group-custom") || usernameInput.parentElement;
+            
+            const empresaWrapper = document.createElement("div");
+            empresaWrapper.className = "input-group-custom";
+            empresaWrapper.style.marginBottom = "1rem";
+            empresaWrapper.innerHTML = `
+                <svg class="input-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+                </svg>
+                <select name="empresa_id" required>
+                    <option value="" disabled selected>Selecciona una empresa...</option>
+                    {% for emp in empresas_disponibles %}
+                        <option value="{{ emp.id_empresa }}">{{ emp.nombre }}</option>
+                    {% endfor %}
+                </select>
+            `;
+
+            if (userWrapper && userWrapper.parentNode) {
+                userWrapper.parentNode.insertBefore(empresaWrapper, userWrapper);
             }
         }
 

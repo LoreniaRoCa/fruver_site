@@ -10,6 +10,14 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
 
+class Empresa(models.Model):
+    id_empresa = models.CharField(max_length=20, primary_key=True) # ej: 'FRUSA', 'EMPRESA_B'
+    nombre = models.CharField(max_length=150) # ej: 'Fruta S.A. de C.V.'
+    activa = models.BooleanField(default=True)
+
+    def __str__(self):
+        return f"{self.id_empresa} - {self.nombre}"
+
 class Competencia(models.Model):
     id_competencia = models.AutoField(primary_key=True)
 # =========================================================================
@@ -62,18 +70,30 @@ class CompetenciaClasificacion(models.Model):
         verbose_name_plural = "Competencia Clasificaciones"   
 
 class Departamento(models.Model):
-    id_departamento = models.AutoField(primary_key=True)
+    # 'id' es la nueva PK primaria manejada por Django
+    id_departamento = models.IntegerField(verbose_name="ID Departamento (Local)")
     descripcion = models.CharField(max_length=150)
+    empresa = models.ForeignKey(
+        Empresa, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        db_column='empresa'
+    )
 
     class Meta:
         managed = True
         db_table = 'rh_departamento'
+        unique_together = ('empresa', 'id_departamento') # 🌟 Restricción multitenant
+        verbose_name = "Departamento"
+        verbose_name_plural = "Departamentos"
+        ordering = ['id_departamento']
 
     def __str__(self):
         return self.descripcion
 
 class Empleado(models.Model):
-    id_empleado = models.AutoField(primary_key=True)
+    id_empleado = models.IntegerField(verbose_name="ID Empleado")
 
     # 2. El campo mágico: Relación uno a uno.
     # Un empleado pertenece a un usuario, un usuario pertenece a un empleado.
@@ -142,9 +162,18 @@ class Empleado(models.Model):
         default=False, 
         verbose_name="¿Se evalúa?"
     )    
+    empresa = models.ForeignKey(
+        Empresa, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        db_column='empresa'
+    )
     class Meta:
         managed = True
         db_table = 'rh_empleado'
+        unique_together = ('empresa', 'id_empleado')
+        ordering = ['id_empleado']
 
     def __str__(self):
         return self.nombre_largo
@@ -156,6 +185,13 @@ class Evaluacion(models.Model):
     fecha_final = models.DateField()
     # NUEVO CAMPO: Indica si el periodo de evaluación ya fue clausurado por el administrador
     cerrada = models.BooleanField(default=False, verbose_name="¿Evaluación Cerrada?")
+    empresa = models.ForeignKey(
+        Empresa, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        db_column='empresa'
+    )
     class Meta:
         managed = True
         db_table = 'rh_evaluacion'
@@ -165,26 +201,29 @@ class Evaluacion(models.Model):
 
 
 class EvaluacionDet(models.Model):
-    #pk = models.CompositePrimaryKey('id_evaluacion', 'id_competencia', 'id_empleado', 'tipo')
     id_evaluacion = models.ForeignKey(Evaluacion, models.DO_NOTHING, db_column='id_evaluacion')
     id_competencia = models.ForeignKey(Competencia, models.DO_NOTHING, db_column='id_competencia')
-    id_empleado = models.ForeignKey(Empleado, models.DO_NOTHING, db_column='id_empleado')
+    id_empleado = models.ForeignKey(Empleado, models.CASCADE, db_column='id_empleado')
     calificacion = models.IntegerField(blank=True, null=True)
-    # Definimos las opciones válidas
+
     TIPO_EVALUADOR_CHOICES = [
         ('E', 'Empleado (Autoevaluación)'),
         ('J', 'Jefe (Evaluación a Colaborador)'),
     ]
 
-    # ... tus otros campos ...
-
     tipo = models.CharField(
         max_length=1,
         choices=TIPO_EVALUADOR_CHOICES,
-        blank=False,  # No permite que se envíe vacío en formularios
-        null=False    # No permite valores NULL en la base de datos
+        blank=False,
+        null=False
     )
-
+    empresa = models.ForeignKey(
+        Empresa, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        db_column='empresa'
+    )
     class Meta:
         unique_together = (('id_evaluacion', 'id_competencia', 'id_empleado', 'tipo'),)
         managed = True
@@ -192,14 +231,25 @@ class EvaluacionDet(models.Model):
 
 
 class Puesto(models.Model):
-    id_puesto = models.AutoField(primary_key=True)
+    # 'id' es la nueva PK primaria manejada por Django
+    id_puesto = models.IntegerField(verbose_name="ID Puesto (Local)")
     descripcion = models.CharField(max_length=150)
+    empresa = models.ForeignKey(
+        Empresa, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        db_column='empresa'
+    )
 
     class Meta:
         managed = True
         db_table = 'rh_puesto'
+        unique_together = ('empresa', 'id_puesto') # 🌟 Restricción multitenant
+        verbose_name = "Puesto"
+        verbose_name_plural = "Puestos"
+        ordering = ['id_puesto']
 
-    # ADICIONA ESTA FUNCIÓN AL FINAL DE LA CLASE PUESTO
     def __str__(self):
         return self.descripcion
 
@@ -213,16 +263,30 @@ class EvaluacionComentario(models.Model):
         ('J', 'Jefe (Evaluación a Colaborador)')
     ]
 
-    id_evaluacion = models.ForeignKey(Evaluacion, on_delete=models.CASCADE)
-    id_empleado = models.ForeignKey(Empleado, on_delete=models.CASCADE)
+    # Mapeo correcto hacia los nombres reales de la BD
+    id_evaluacion = models.ForeignKey(
+        Evaluacion, 
+        on_delete=models.CASCADE, 
+        db_column='id_evaluacion_id'  # <-- Debe incluir _id
+    )
+    id_empleado = models.ForeignKey(
+        Empleado, 
+        on_delete=models.CASCADE, 
+        db_column='id_empleado_id'    # <-- Debe incluir _id
+    )
     tipo_bloque = models.CharField(max_length=1, choices=TIPO_BLOQUE_CHOICES)
     tipo_evaluador = models.CharField(max_length=1, choices=TIPO_EVALUADOR_CHOICES)
     fortalezas = models.TextField(blank=True, null=True)
     areas_oportunidad = models.TextField(blank=True, null=True)
-
+    empresa = models.ForeignKey(
+        Empresa, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        db_column='empresa'
+    )
     class Meta:
         db_table = 'rh_evaluacioncomentario'
-        # Esto evita duplicados: solo un registro por evaluación, empleado, bloque y rol
         unique_together = ('id_evaluacion', 'id_empleado', 'tipo_bloque', 'tipo_evaluador')
 
     def __str__(self):
@@ -231,7 +295,13 @@ class EvaluacionComentario(models.Model):
 class ClasificacionPorPuesto(models.Model):
     id_puesto = models.ForeignKey(Puesto, on_delete=models.CASCADE, verbose_name="Puesto")
     id_clasificacion = models.ForeignKey(CompetenciaClasificacion, on_delete=models.CASCADE, verbose_name="Clasificación Asignada")
-
+    empresa = models.ForeignKey(
+        Empresa, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        db_column='empresa'
+    )
     class Meta:
         verbose_name = "Clasificación por Puesto"
         verbose_name_plural = "Matriz: Clasificaciones por Puesto"
@@ -243,7 +313,7 @@ class ClasificacionPorEmpleado(models.Model):
     id_empleado = models.ForeignKey(Empleado, on_delete=models.CASCADE, verbose_name="Empleado")
     id_clasificacion = models.ForeignKey(CompetenciaClasificacion, on_delete=models.CASCADE, verbose_name="Clasificación Extra")
     motivo = models.CharField(max_length=255, blank=True, null=True, help_text="Ej: Proyecto especial 2026")
-    
+
     # Guardará el ID de la competencia creada automáticamente (Oculto para el usuario)
     competencia_exclusiva = models.ForeignKey(
         'Competencia', 
@@ -251,8 +321,15 @@ class ClasificacionPorEmpleado(models.Model):
         blank=True, 
         null=True,
         verbose_name="ID Competencia Exclusiva"
+        
     )
-
+    empresa = models.ForeignKey(
+        Empresa, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        db_column='empresa'
+    )
     class Meta:
         verbose_name = "Clasificación Especial por Empleado"
         verbose_name_plural = "Excepciones: Clasificaciones por Empleado"
@@ -260,32 +337,40 @@ class ClasificacionPorEmpleado(models.Model):
         db_table = 'rh_clasificacionporempleado'
 
 class EmpleadoCompetenciaAsignada(models.Model):
-    """
-    Esta tabla guardará de forma única las competencias palomeadas para cada empleado.
-    """
-    id_empleado = models.ForeignKey(Empleado, on_delete=models.CASCADE, related_name='competencias_asignadas')
-    id_competencia = models.ForeignKey('Competencia', on_delete=models.CASCADE)
+    # 🌟 Se cambia db_column a 'id_empleado_id' y en id_competencia a 'id_competencia_id'
+    id_empleado = models.ForeignKey(Empleado, on_delete=models.CASCADE, db_column='id_empleado_id', related_name='competencias_asignadas')
+    id_competencia = models.ForeignKey('Competencia', on_delete=models.CASCADE, db_column='id_competencia_id')   
     fecha_asignacion = models.DateField(auto_now_add=True)
-
+    empresa = models.ForeignKey(
+        Empresa, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        db_column='empresa'
+    )
     class Meta:
         verbose_name = "Competencia Asignada a Empleado"
         verbose_name_plural = "Competencias Asignadas"
-        # Evita que palomeen dos veces la misma competencia para el mismo empleado
         unique_together = ('id_empleado', 'id_competencia') 
         db_table = 'rh_empleadocompetenciaasignada'
 
-    def __str__(self):
-        return f"{self.id_empleado.nombre_largo} -> {self.id_competencia.nombre}"        
+    # 🌟 AGREGAR ESTE MÉTODO SAVE:
+    def save(self, *args, **kwargs):
+        # Si la empresa no está asignada pero el empleado tiene empresa, la copia automáticamente
+        if not self.empresa_id and self.id_empleado and self.id_empleado.empresa:
+            self.empresa = self.id_empleado.empresa
+        super().save(*args, **kwargs)        
 
 class TokenAccesoEvaluacion(models.Model):
     id_token = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    empleado = models.ForeignKey('Empleado', on_delete=models.CASCADE)
+    # 🌟 Se actualiza db_column a 'empleado_id'
+    empleado = models.ForeignKey('Empleado', on_delete=models.CASCADE, db_column='empleado_id')
     creado_en = models.DateTimeField(auto_now_add=True)
     utilizado = models.BooleanField(default=False)
+
     class Meta:
         db_table = 'rh_tokenaccesoevaluacion'
 
     def es_valido(self):
-        # El enlace expira a los 5 días y no debe haber sido usado antes
         expiracion = self.creado_en + timezone.timedelta(days=5)
-        return not self.utilizado and timezone.now() < expiracion        
+        return not self.utilizado and timezone.now() < expiracion
