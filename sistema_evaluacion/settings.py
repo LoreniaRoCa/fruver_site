@@ -283,6 +283,18 @@ UNFOLD = {
                     },
                 ]
             },
+            # 🟢 NUEVO BLOQUE DE REPORTES Y TABLAS DINÁMICAS
+            {
+                "title": "Reportes y Análisis",
+                "separator": True,
+                "items": [
+                    {
+                        "title": "Inventario Pivot",
+                        "link": "/inventario/pivot/",  # Ruta configurada en urls.py
+                        "icon": "bar_chart",           # Icono de Material Icons
+                    },
+                ],
+            },
             {
                 "title": "Catálogos del Sistema",
                 "separator": True,

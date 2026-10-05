@@ -19,7 +19,7 @@ from django.urls import path
 from django.views.generic import RedirectView
 from rh import views  # <-- ESTA ES LA LÍNEA MÁGICA QUE FALTABA
 from rh.admin import admin_site, procesar_evaluaciones_loading_view
-from rh.views import probar_correo_view, CustomAdminLoginView
+from rh.views import probar_correo_view, CustomAdminLoginView, inventario_pivot_view
 urlpatterns = [
     path('', RedirectView.as_view(url='admin/', permanent=False)),
     path('redireccionar-login/', views.redireccionar_segun_rol, name='redireccionar_login'),
@@ -34,7 +34,8 @@ urlpatterns = [
     path('admin/resumen-evaluaciones/', views.resumen_evaluaciones_view, name='resumen_evaluaciones'),    
     path('admin/panel-evaluacion/', views.panel_evaluacion_view, name='panel_evaluacion'),    
     path('admin/panel-evaluacion/<int:subordinado_id>/', views.panel_evaluacion_view, name='panel_evaluacion_subordinado'),
-    
+    # 🟢 Ruta de la tabla dinámica
+    path('inventario/pivot/', inventario_pivot_view, name='inventario_pivot'),
     # 🟢 SUBIR AQUÍ LA RUTA DE ASIGNACIÓN DE COMPETENCIAS
     path('admin/asignacion-competencias/', views.asignacion_competencias_view, name='asignacion_competencias'),
 

@@ -2,6 +2,7 @@
 # SECCIÓN DE IMPORTS CORREGIDA
 # ==========================================
 import openpyxl  
+import json
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side  
 from django.contrib.auth.views import LoginView
 from django.core.mail import send_mail
@@ -17,6 +18,11 @@ from django.contrib import messages
 from django.contrib import admin
 from django.utils.text import slugify
 from django.contrib.auth import logout
+#Para tablas dinamicas
+import pandas as pd
+import pygwalker as pyg
+from django.db import connection
+
 # 💡 INCLUSIÓN: Importamos el nuevo modelo de la tabla intermedia
 from .models import (
     Empleado, CompetenciaClasificacion, Competencia, Evaluacion, 
@@ -1191,3 +1197,35 @@ def probar_correo_view(request):
         return HttpResponse(f"<h1>✅ Correo enviado con éxito. Resultado SMTP: {resultado}</h1>")
     except Exception as e:
         return HttpResponse(f"<h1>❌ Error al enviar correo 6:</h1><pre>{str(e)}</pre>")    
+
+# Tablas dinamicas
+# @login_required  # Protege la vista dentro del sistema
+# views.py
+@login_required
+def inventario_pivot_view(request):
+    query = """
+        SELECT 
+            v_nombre_cul AS "Cultivo",
+            v_nombre_col AS "Color",
+            v_nombre_eti AS "Etiqueta",
+            v_nombre_prc AS "Variedad",
+            v_nombre_tam AS "Tamaño",
+            n_bulxpa_pal AS "Cantidad",
+            d_empaque_pal AS "Fecha"
+        FROM conc_eye_inventario
+    """
+    
+    with connection.cursor() as cursor:
+        cursor.execute(query)
+        columns = [col[0] for col in cursor.description]
+        data = cursor.fetchall()
+
+    df = pd.DataFrame(data, columns=columns)
+    df['Cantidad'] = pd.to_numeric(df['Cantidad'], errors='coerce').fillna(0)
+    
+    if 'Fecha' in df.columns:
+        df['Fecha'] = df['Fecha'].astype(str)
+
+    pivot_data = df.to_dict(orient='records')
+
+    return render(request, 'reportes/inventario_pivot.html', {'pivot_data': pivot_data})
