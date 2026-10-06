@@ -12,6 +12,9 @@ class RestringirAccesoAdminMiddleware:
         if request.user.is_authenticated and not request.user.is_superuser:
             path = request.path
 
+            if 'inventario' in path or 'reportes' in path:
+                return self.get_response(request)
+
             # Rutas del sistema que SÍ se le permiten a un empleado/evaluador
             rutas_permitidas = [
                 '/admin/panel-evaluacion',
@@ -19,6 +22,10 @@ class RestringirAccesoAdminMiddleware:
                 '/cerrar-sesion',
                 '/guardar-evaluacion',
                 '/redireccionar-login',
+                '/inventario/',          # <-- AGREGAR ESTA LÍNEA
+                '/reportes/',            # <-- AGREGAR ESTA LÍNEA
+                '/static/',
+                '/media/',                
             ]
 
             # Si intenta entrar a cualquier ruta de /admin/

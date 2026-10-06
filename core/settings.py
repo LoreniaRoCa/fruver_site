@@ -1,8 +1,6 @@
 """
 Django settings for sistema_evaluacion project.
 """
-
-
 from pathlib import Path
 from django.urls import reverse_lazy
 
@@ -40,45 +38,6 @@ USE_X_FORWARDED_PORT = True
 CSRF_COOKIE_SECURE = True
 SESSION_COOKIE_SECURE = True
 
-
-# EMAIL LOCAL
-# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-# EMAIL_HOST = 'smtp.gmail.com'
-# EMAIL_PORT = 587
-# EMAIL_USE_TLS = True
-# EMAIL_HOST_USER = 'l.rodriguez@fruver.com.mx'
-# EMAIL_HOST_PASSWORD = 'pxnc hyms jgrb yipx' 
-# DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
-
-#EMAIL NUBE
-# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-# EMAIL_HOST = 'smtp.gmail.com'
-# EMAIL_PORT = 465                 # 🌟 Cambiar 587 por 465
-# EMAIL_USE_TLS = False            # 🌟 Cambiar a False
-# EMAIL_USE_SSL = True             # 🌟 Agregar SSL como True
-# EMAIL_HOST_USER = 'l.rodriguez@fruver.com.mx'
-# EMAIL_HOST_PASSWORD = 'pxnc hyms jgrb yipx' 
-# DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
-# DEFAULT_FROM_EMAIL = 'l.rodriguez@fruver.com.mx'  # 👈 Poner directamente la cadena de texto
-# EMAIL_TIMEOUT = 10
-
-# ==========================================
-# EMAIL PARA RENDER
-# ==========================================
-# # ==========================================
-# # CONFIGURACIÓN DE EMAIL PARA RENDER / NUBE
-# # ==========================================
-# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-# EMAIL_HOST = 'smtp.gmail.com'
-# EMAIL_PORT = 587                  # Cambiar de 465 a 587
-# EMAIL_USE_TLS = True              # Habilitar TLS
-# EMAIL_USE_SSL = False             # Deshabilitar SSL directo
-
-# EMAIL_HOST_USER = 'l.rodriguez@fruver.com.mx'
-# EMAIL_HOST_PASSWORD = 'vfta uakr wzrc pqoa'
-# DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
-# EMAIL_TIMEOUT = 10
-
 # ==========================================
 # CONFIGURACIÓN SMTP DIRECTA PARA DREAMHOST
 # ==========================================
@@ -105,6 +64,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     
     'rh.apps.RhConfig',
+    'reportes.apps.ReportesConfig',
 ]
 
 MIDDLEWARE = [
@@ -121,7 +81,7 @@ MIDDLEWARE = [
     'rh.middleware.RestringirAccesoAdminMiddleware',
 ]
 
-ROOT_URLCONF = 'sistema_evaluacion.urls'
+ROOT_URLCONF = 'core.urls'
 
 # TEMPLATES = [
 #     {
@@ -143,9 +103,11 @@ TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
         'DIRS': [
-            BASE_DIR / 'templates',  # 🌟 OBLIGATORIO PARA DETECTAR base_site.html
-            BASE_DIR / 'rh' / 'templates',
-        ], 
+                    BASE_DIR / 'templates',
+                    BASE_DIR / 'rh' / 'templates',
+                    BASE_DIR / 'reportes' / 'templates',  # <-- AGREGAR ESTA LÍNEA
+                    BASE_DIR / 'reportes' / 'templates',  # 🌟 Permite cargar plantillas como 'reportes/inventario_pivot.html'
+                ],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -159,7 +121,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'sistema_evaluacion.wsgi.application'
+WSGI_APPLICATION = 'core.wsgi.application'
 
 db_port = os.environ.get('DB_PORT')
 
