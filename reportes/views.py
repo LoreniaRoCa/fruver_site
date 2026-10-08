@@ -1,35 +1,49 @@
-from django.shortcuts import render
+import json
+from decimal import Decimal
+from datetime import date, datetime
+from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.db import connection
-import pandas as pd
+from .models import Pivot_Dinamico
 
 @login_required
-def inventario_pivot_view(request):
-    try:
-        query = """
-            SELECT 
-                v_nombre_cul AS "Cultivo",
-                v_nombre_col AS "Color",
-                v_nombre_eti AS "Etiqueta",
-                v_nombre_prc AS "Variedad",
-                v_nombre_tam AS "Tamaño",
-                n_bulxpa_pal AS "Cantidad",
-                d_empaque_pal AS "Fecha"
-            FROM conc_eye_inventario
-        """
-        with connection.cursor() as cursor:
-            cursor.execute(query)
-            columns = [col[0] for col in cursor.description]
-            data = cursor.fetchall()
+def reporte_dinamico_view(request, slug):
+    reporte = get_object_or_404(Pivot_Dinamico, slug=slug, activo=True)
+    empresa_activa = request.session.get('empresa_activa') or request.session.get('empresa_id')
 
-        df = pd.DataFrame(data, columns=columns)
-        df['Cantidad'] = pd.to_numeric(df['Cantidad'], errors='coerce').fillna(0)
-        if 'Fecha' in df.columns:
-            df['Fecha'] = df['Fecha'].astype(str)
+    datos = []
+    with connection.cursor() as cursor:
+        if "%s" in reporte.query_sql and empresa_activa:
+            cursor.execute(reporte.query_sql, [empresa_activa])
+        else:
+            cursor.execute(reporte.query_sql)
+        
+        columnas = [col[0] for col in cursor.description]
+        rows = cursor.fetchall()
+        
+        for row in rows:
+            fila_dict = {}
+            for col, val in zip(columnas, row):
+                # Convertir Decimal a float y fechas a cadena ISO para ser compatibles con JSON
+                if isinstance(val, Decimal):
+                    val = float(val)
+                elif isinstance(val, (date, datetime)):
+                    val = val.isoformat()
+                fila_dict[col] = val
+            datos.append(fila_dict)
 
-        pivot_data = df.to_dict(orient='records')
-    except Exception as e:
-        print(f"Error cargando inventario: {e}")
-        pivot_data = []
+    context = {
+        'titulo_reporte': reporte.nombre,
+        'datos_json': datos,
+        'configuracion_pivot': reporte.configuracion_pivot or [],
+    }
+    return render(request, 'reportes/pivot_generico.html', context)
 
-    return render(request, 'reportes/inventario_pivot.html', {'pivot_data': pivot_data})
+@login_required
+def lista_tablas_dinamicas_view(request):
+    # Consulta todos los reportes activos ordenados por el campo 'orden' o 'nombre'
+    reportes = Pivot_Dinamico.objects.filter(activo=True).order_by('orden', 'nombre')
+    
+    return render(request, "reportes/lista_tablas.html", {
+        "reportes": reportes
+    })

@@ -19,37 +19,39 @@ from django.urls import path, include
 from django.views.generic import RedirectView
 from rh import views  # <-- ESTA ES LA LÍNEA MÁGICA QUE FALTABA
 from rh.admin import admin_site, procesar_evaluaciones_loading_view
-from rh.views import probar_correo_view, CustomAdminLoginView
+from rh.views import probar_correo_view, CustomAdminLoginView, dashboard_modulos_view
 urlpatterns = [
-     path('', RedirectView.as_view(url='admin/', permanent=False)),
-     path('redireccionar-login/', views.redireccionar_segun_rol, name='redireccionar_login'),
-     path('probar-correo/', probar_correo_view, name='probar_correo'),
-    
+    path('', RedirectView.as_view(url='admin/', permanent=False)),
+    path('redireccionar-login/', views.redireccionar_segun_rol, name='redireccionar_login'),
+    path('probar-correo/', probar_correo_view, name='probar_correo'),
 
-    
-     # --- Rutas de Administración y Recursos Humanos ---
-     path('admin/login/', CustomAdminLoginView.as_view(), name='login'),
-     path('admin/descargar-plantilla/<str:model_name>/', views.descargar_plantilla_excel, name='descargar_plantilla'),
-     path('evaluaciones/asignacion-competencias/exportar/', views.exportar_competencias_excel, name='exportar_competencias_excel'),
-     path('admin/resumen-evaluaciones/excel-detalle/', views.exportar_detalle_competencias_excel, name='exportar_detalle_competencias_excel'),    
-     path('admin/resumen-evaluaciones/excel/', views.exportar_resumen_excel, name='exportar_resumen_excel'),
-     path('admin/resumen-evaluaciones/', views.resumen_evaluaciones_view, name='resumen_evaluaciones'),    
-     path('admin/panel-evaluacion/', views.panel_evaluacion_view, name='panel_evaluacion'),    
-     path('admin/panel-evaluacion/<int:subordinado_id>/', views.panel_evaluacion_view, name='panel_evaluacion_subordinado'),
-     path('admin/asignacion-competencias/', views.asignacion_competencias_view, name='asignacion_competencias'),
+    # --- Módulo de Reportes & BI ---
+    path('', include('reportes.urls', namespace='reportes')),
 
-     path('admin/procesar-evaluaciones-loading/<str:session_key>/', admin_site.admin_view(procesar_evaluaciones_loading_view), name='procesar_evaluaciones_loading'),
+    # --- Rutas de Administración y Recursos Humanos (SE CONSERVAN TODAS) ---
+    path('admin/login/', CustomAdminLoginView.as_view(), name='login'),
+    path('admin/descargar-plantilla/<str:model_name>/', views.descargar_plantilla_excel, name='descargar_plantilla'),
+    path('evaluaciones/asignacion-competencias/exportar/', views.exportar_competencias_excel, name='exportar_competencias_excel'),
+    path('admin/resumen-evaluaciones/excel-detalle/', views.exportar_detalle_competencias_excel, name='exportar_detalle_competencias_excel'),    
+    path('admin/resumen-evaluaciones/excel/', views.exportar_resumen_excel, name='exportar_resumen_excel'),
+    path('admin/resumen-evaluaciones/', views.resumen_evaluaciones_view, name='resumen_evaluaciones'),    
+    path('admin/panel-evaluacion/', views.panel_evaluacion_view, name='panel_evaluacion'),    
+    path('admin/panel-evaluacion/<int:subordinado_id>/', views.panel_evaluacion_view, name='panel_evaluacion_subordinado'),
+    path('admin/asignacion-competencias/', views.asignacion_competencias_view, name='asignacion_competencias'),
 
-     # Acceso de correo a personal a evaluar
-     path('evaluacion/acceso/<uuid:token_uuid>/', views.acceso_magico_view, name='acceso_magico'),
-     path('evaluacion/guardar/', views.guardar_evaluacion_view, name='guardar_evaluacion'),
-     path('cerrar-sesion/', views.cerrar_sesion_view, name='cerrar_sesion'),
+    path('admin/procesar-evaluaciones-loading/<str:session_key>/', admin_site.admin_view(procesar_evaluaciones_loading_view), name='procesar_evaluaciones_loading'),
 
-     path('admin/', RedirectView.as_view(url='/admin/rh/evaluacion/', permanent=False)),
+    # Acceso de correo a personal a evaluar
+    path('evaluacion/acceso/<uuid:token_uuid>/', views.acceso_magico_view, name='acceso_magico'),
+    path('evaluacion/guardar/', views.guardar_evaluacion_view, name='guardar_evaluacion'),
+    path('cerrar-sesion/', views.cerrar_sesion_view, name='cerrar_sesion'),
 
-     # --- Módulo de Reportes & BI (Se incluyen todas las rutas de reportes/urls.py) ---
-     path('', include('reportes.urls')),
+    # 🌟 NUEVA RUTA PRINCIPAL AL DASHBOARD DE MÓDULOS
+    path('admin/dashboard/', dashboard_modulos_view, name='dashboard_modulos'),
 
-     # El registro de urls de admin queda abajo
-     path('admin/', admin_site.urls),
+    # En lugar de redirigir a evaluacion, redirige al dashboard de módulos
+    path('admin/', RedirectView.as_view(url='/admin/dashboard/', permanent=False)),
+
+    # Registro final del admin
+    path('admin/', admin_site.urls),
 ]

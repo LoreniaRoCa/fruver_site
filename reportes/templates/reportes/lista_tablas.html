@@ -1,0 +1,84 @@
+{% extends 'admin/base_site.html' %}
+{% load i18n static %}
+
+{% block title %}Tablas Dinámicas | {{ site_title|default:_('Django site admin') }}{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6 max-w-7xl">
+    
+    <!-- Encabezado de la página -->
+    <div class="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-gray-200 dark:border-gray-800 pb-5">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 flex items-center gap-3">
+                <span class="p-2 bg-primary-50 dark:bg-primary-950/50 text-primary-600 dark:text-primary-400 rounded-xl">
+                    <span class="material-symbols-outlined text-2xl">table_chart</span>
+                </span>
+                Tablas Dinámicas y Reportes
+            </h1>
+            <p class="text-gray-500 dark:text-gray-400 text-sm mt-1">
+                Selecciona una consulta para explorar, analizar y exportar información interactiva.
+            </p>
+        </div>
+        
+        <a href="{% url 'dashboard_modulos' %}" 
+           class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white dark:bg-gray-800 dark:text-gray-200 border border-gray-300 dark:border-gray-700 rounded-lg shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+            <span class="material-symbols-outlined text-base">arrow_back</span>
+            Volver al Dashboard
+        </a>
+    </div>
+
+    <!-- Rejilla / Grid de Reportes -->
+    {% if reportes %}
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {% for rep in reportes %}
+                <a href="{% url 'reportes:reporte_pivot_dinamico' rep.slug %}" 
+                   class="group flex flex-col justify-between bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl p-6 shadow-sm hover:shadow-md hover:border-primary-500 dark:hover:border-primary-500 transition duration-200">
+                    
+                    <div>
+                        <!-- Icono y Nombre -->
+                        <div class="flex items-center gap-4 mb-4">
+                            <div class="w-12 h-12 flex items-center justify-center rounded-xl bg-primary-50 text-primary-600 dark:bg-primary-950/60 dark:text-primary-400 group-hover:bg-primary-600 group-hover:text-white transition duration-200">
+                                <span class="material-symbols-outlined text-2xl">
+                                    {% if rep.icono %}{{ rep.icono }}{% else %}bar_chart{% endif %}
+                                </span>
+                            </div>
+                            <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-100 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition">
+                                {{ rep.nombre }}
+                            </h2>
+                        </div>
+
+                        <!-- Descripción -->
+                        {% if rep.descripcion %}
+                            <p class="text-sm text-gray-500 dark:text-gray-400 line-clamp-2 mb-4">
+                                {{ rep.descripcion }}
+                            </p>
+                        {% else %}
+                            <p class="text-sm text-gray-400 dark:text-gray-500 italic mb-4">
+                                Análisis dinámico y filtrado de datos para {{ rep.nombre|lower }}.
+                            </p>
+                        {% endif %}
+                    </div>
+
+                    <!-- Pie de la tarjeta -->
+                    <div class="pt-4 border-t border-gray-100 dark:border-gray-700/60 flex items-center justify-between text-xs font-medium text-primary-600 dark:text-primary-400">
+                        <span>Abrir reporte</span>
+                        <span class="material-symbols-outlined text-base transform group-hover:translate-x-1 transition">arrow_forward</span>
+                    </div>
+                </a>
+            {% endfor %}
+        </div>
+    {% else %}
+        <!-- Estado Vacío -->
+        <div class="bg-white dark:bg-gray-800 border border-dashed border-gray-300 dark:border-gray-700 rounded-2xl p-12 text-center max-w-lg mx-auto my-12">
+            <div class="w-16 h-16 bg-gray-100 dark:bg-gray-700 text-gray-400 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span class="material-symbols-outlined text-3xl">folder_open</span>
+            </div>
+            <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">No hay tablas dinámicas activas</h3>
+            <p class="text-gray-500 dark:text-gray-400 text-sm mt-1">
+                Actualmente no tienes consultas disponibles o activas en la base de datos.
+            </p>
+        </div>
+    {% endif %}
+
+</div>
+{% endblock %}

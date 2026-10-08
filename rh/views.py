@@ -16,13 +16,13 @@ from django.contrib.auth.decorators import user_passes_test
 from django.contrib.auth import login
 from django.contrib import messages
 from django.contrib import admin
-from django.utils.text import slugify
 from django.contrib.auth import logout
 #Para tablas dinamicas
 import pandas as pd
 import pygwalker as pyg
 from django.db import connection
-
+from reportes.models import Pivot_Dinamico
+from django.utils.text import slugify
 # 💡 INCLUSIÓN: Importamos el nuevo modelo de la tabla intermedia
 from .models import (
     Empleado, CompetenciaClasificacion, Competencia, Evaluacion, 
@@ -1202,30 +1202,38 @@ def probar_correo_view(request):
 # @login_required  # Protege la vista dentro del sistema
 # views.py
 @login_required
-def inventario_pivot_view(request):
-    query = """
-        SELECT 
-            v_nombre_cul AS "Cultivo",
-            v_nombre_col AS "Color",
-            v_nombre_eti AS "Etiqueta",
-            v_nombre_prc AS "Variedad",
-            v_nombre_tam AS "Tamaño",
-            n_bulxpa_pal AS "Cantidad",
-            d_empaque_pal AS "Fecha"
-        FROM conc_eye_inventario
-    """
+def dashboard_modulos_view(request):
+    # Obtener el primer reporte activo registrado en la BD
+    primer_reporte = Pivot_Dinamico.objects.filter(activo=True).order_by('orden').first()
     
-    with connection.cursor() as cursor:
-        cursor.execute(query)
-        columns = [col[0] for col in cursor.description]
-        data = cursor.fetchall()
+    if primer_reporte:
+        slug_limpio = slugify(primer_reporte.slug or primer_reporte.nombre)
+        url_pivot = f"/reportes/pivot/{slug_limpio}/"
+    else:
+        url_pivot = "/reportes/pivot/inventario-fruverpack/"
 
-    df = pd.DataFrame(data, columns=columns)
-    df['Cantidad'] = pd.to_numeric(df['Cantidad'], errors='coerce').fillna(0)
-    
-    if 'Fecha' in df.columns:
-        df['Fecha'] = df['Fecha'].astype(str)
+    modulos = [
+        {
+            "titulo": "Recursos Humanos",
+            "descripcion": "Gestión de evaluaciones de desempeño, empleados, puestos y competencias.",
+            "url": "/admin/rh/evaluacion/",
+            "solo_superuser": False
+        },
+        {
+        "titulo": "Tablas Dinámicas",
+        "descripcion": "Análisis interactivo de información y reportes ejecutivos.",
+        "url": "/reportes/pivot/",  # Ahora apunta a la vista del catálogo general
+        "solo_superuser": False
+        },
+        {
+            "titulo": "Seguridad del Sitio",
+            "descripcion": "Administración de usuarios, grupos de acceso y permisos del sistema.",
+            "url": "/admin/auth/user/",
+            "solo_superuser": True
+        },
+    ]
 
-    pivot_data = df.to_dict(orient='records')
+    if not request.user.is_superuser:
+        modulos = [m for m in modulos if not m["solo_superuser"]]
 
-    return render(request, 'reportes/inventario_pivot.html', {'pivot_data': pivot_data})
+    return render(request, "admin/index.html", {"modulos": modulos})

@@ -34,11 +34,34 @@ class CustomActionForm(ActionForm):
                     choices.append((option_key, option_label))
             self.fields['action'].choices = choices
 
-class CustomAdminSite(UnfoldAdminSite):
-    index_template = "admin/index.html"
 
 class CustomAdminSite(UnfoldAdminSite):
     index_template = "admin/index.html"
+
+    def each_context(self, request):
+        context = super().each_context(request)
+        path = request.path.lower()
+
+        # 1. Módulo Seguridad del Sitio (Usuarios y Grupos de Auth)
+        if any(k in path for k in ['/admin/auth/', '/auth/', '/user/', '/group/']):
+            header_text = "Seguridad del Sitio"
+
+        # 2. Módulo Tablas Dinámicas / Reportes
+        elif any(k in path for k in ['/inventario/', '/reportes/', 'pivot']):
+            header_text = "Tablas Dinámicas"
+
+        # 3. Módulo Recursos Humanos (Evaluaciones, Empleados, Puestos, etc.)
+        elif any(k in path for k in ['/admin/rh/', 'evaluacion', 'empleado', 'puesto', 'departamento', 'competencia', 'resumen', 'panel']):
+            header_text = "Recursos Humanos"
+
+        # 4. Dashboard / Inicio
+        else:
+            header_text = "Portal Empresarial"
+
+        # Sobrescribir en el contexto de Unfold para la plantilla
+        context['site_header'] = header_text
+        context['site_title'] = header_text
+        return context
 
     def index(self, request, extra_context=None):
 

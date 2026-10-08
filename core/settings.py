@@ -83,22 +83,6 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = 'core.urls'
 
-# TEMPLATES = [
-#     {
-#         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-#         'DIRS': [BASE_DIR / 'rh' / 'templates'], 
-#         'APP_DIRS': True,
-#         'OPTIONS': {
-#             'context_processors': [
-#                 'django.template.context_processors.request',
-#                 'django.contrib.auth.context_processors.auth',
-#                 'django.contrib.messages.context_processors.messages',
-#                 'django.template.context_processors.i18n',
-#             ],
-#         },
-#     },
-# ]
-
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
@@ -177,6 +161,7 @@ STATICFILES_FINDERS = [
     'django.contrib.staticfiles.finders.AppDirectoriesFinder',
 ]
 
+LOGIN_URL = '/admin/login/'
 
 # Redirecciones tras autenticación
 #LOGIN_REDIRECT_URL = '/admin/'  # O la ruta principal de tu sistema
@@ -191,9 +176,111 @@ LOGOUT_REDIRECT_URL = '/admin/login/'
 # =========================================================================
 # CONFIGURACIÓN DE DJANGO UNFOLD (DASHBOARD ACTIVADO + TRADUCCIÓN COMPLETA)
 # =========================================================================
+
+NAV_RECURSOS_HUMANOS = [
+    {
+        "title": "Evaluaciones de Desempeño",
+        "separator": True,
+        "items": [
+            {
+                "title": "Mi Panel de Evaluación",
+                "link": "/admin/panel-evaluacion/", 
+                "icon": "badge",
+                # 🟢 Visible para TODOS los usuarios que inicien sesión
+                #"permission": lambda request: request.user.is_authenticated,
+            },
+            {
+                "title": "Consolidado Resultados",
+                "link": "/admin/resumen-evaluaciones/", 
+                "icon": "analytics",
+                # 🔴 Solo para Administradores
+                #"permission": lambda request: request.user.is_superuser,
+            },
+            {
+                "title": "Asignación de Competencias",
+                "link": reverse_lazy("asignacion_competencias"),
+                "icon": "assignment",
+                # 🔴 Solo para Administradores
+                #"permission": lambda request: request.user.is_superuser,
+            },
+        ]
+    },
+   
+    {
+        "title": "Catálogos del Sistema",
+        "separator": True,
+        # 🔴 Solo para Administradores (Oculto para empleados normales)
+        #"permission": lambda request: request.user.is_superuser,
+        "items": [
+            {
+                "title": "Empleados",
+                "link": "/admin/rh/empleado/",
+                "icon": "people",
+            },
+            {
+                "title": "Puestos",
+                "link": "/admin/rh/puesto/",
+                "icon": "work",
+            },
+            {
+                "title": "Departamentos",
+                "link": "/admin/rh/departamento/",
+                "icon": "domain",
+            },
+            {
+                "title": "Competencias",
+                "link": "/admin/rh/competencia/",
+                "icon": "star",
+            },
+            {
+                "title": "Clasificación de Competencias",
+                "link": "/admin/rh/competenciaclasificacion/",
+                "icon": "layers",
+            },
+            {
+                "title": "Configurar Evaluaciones",
+                "icon": "event_note",
+                "link": "/admin/rh/evaluacion/", 
+            },                    
+        ],
+    },
+  
+]
+
+# 2. Menú exclusivo de Tablas Dinámicas / Reportes
+NAV_TABLAS_DINAMICAS =[
+    {
+        "items": [
+            {
+                "title": "Inventario Pivot",
+                "link": "/inventario/pivot/",
+                "icon": "bar_chart",
+            },
+        ],
+    },
+]
+
+# 3. Menú exclusivo de Seguridad (Superusuarios)
+NAV_SEGURIDAD = [
+    {
+        "items": [
+            {
+                "title": "Usuarios",
+                "icon": "person",
+                "link": reverse_lazy("admin:auth_user_changelist"),
+            },
+            {
+                "title": "Grupos y Permisos",
+                "icon": "group",
+                "link": reverse_lazy("admin:auth_group_changelist"),
+            },
+        ],
+    },
+]
+
 UNFOLD = {
-    "SITE_TITLE": "Recursos Humanos",
-    "SITE_HEADER": "Recursos Humanos",
+    "SITE_TITLE": "Portal Empresarial",
+    "SITE_HEADER": "Portal Empresarial",
     "SIDEBAR_CHANGED": False, 
     "SEARCH_PLACEHOLDER": "Buscar...",
     "DASHBOARD_CALLBACK": None, 
@@ -216,103 +303,7 @@ UNFOLD = {
     
     "SIDEBAR": {
         "show_search": False,
-        "show_all_applications": False, # 🌟 Oculta aplicaciones por defecto
-        "navigation": [
-            {
-                "title": "Evaluaciones de Desempeño",
-                "separator": True,
-                "items": [
-                    {
-                        "title": "Mi Panel de Evaluación",
-                        "link": "/admin/panel-evaluacion/", 
-                        "icon": "badge",
-                        # 🟢 Visible para TODOS los usuarios que inicien sesión
-                        #"permission": lambda request: request.user.is_authenticated,
-                    },
-                    {
-                        "title": "Consolidado Resultados",
-                        "link": "/admin/resumen-evaluaciones/", 
-                        "icon": "analytics",
-                        # 🔴 Solo para Administradores
-                        #"permission": lambda request: request.user.is_superuser,
-                    },
-                    {
-                        "title": "Asignación de Competencias",
-                        "link": reverse_lazy("asignacion_competencias"),
-                        "icon": "assignment",
-                        # 🔴 Solo para Administradores
-                        #"permission": lambda request: request.user.is_superuser,
-                    },
-                ]
-            },
-            # 🟢 NUEVO BLOQUE DE REPORTES Y TABLAS DINÁMICAS
-            {
-                "title": "Reportes y Análisis",
-                "separator": True,
-                "items": [
-                    {
-                        "title": "Inventario Pivot",
-                        "link": "/inventario/pivot/",  # Ruta configurada en urls.py
-                        "icon": "bar_chart",           # Icono de Material Icons
-                    },
-                ],
-            },
-            {
-                "title": "Catálogos del Sistema",
-                "separator": True,
-                # 🔴 Solo para Administradores (Oculto para empleados normales)
-                #"permission": lambda request: request.user.is_superuser,
-                "items": [
-                    {
-                        "title": "Empleados",
-                        "link": "/admin/rh/empleado/",
-                        "icon": "people",
-                    },
-                    {
-                        "title": "Puestos",
-                        "link": "/admin/rh/puesto/",
-                        "icon": "work",
-                    },
-                    {
-                        "title": "Departamentos",
-                        "link": "/admin/rh/departamento/",
-                        "icon": "domain",
-                    },
-                    {
-                        "title": "Competencias",
-                        "link": "/admin/rh/competencia/",
-                        "icon": "star",
-                    },
-                    {
-                        "title": "Clasificación de Competencias",
-                        "link": "/admin/rh/competenciaclasificacion/",
-                        "icon": "layers",
-                    },
-                    {
-                        "title": "Configurar Evaluaciones",
-                        "icon": "event_note",
-                        "link": "/admin/rh/evaluacion/", 
-                    },                    
-                ],
-            },
-            {
-                "title": "Seguridad del Sitio",
-                "separator": True,
-                # 🔴 Solo para Administradores
-                #"permission": lambda request: request.user.is_superuser,
-                "items": [
-                    {
-                        "title": "Usuarios",
-                        "link": reverse_lazy("admin:auth_user_changelist"),
-                        "icon": "people",
-                    },
-                    {
-                        "title": "Grupos y Permisos",
-                        "link": reverse_lazy("admin:auth_group_changelist"),
-                        "icon": "gavel",
-                    },
-                ],
-            },
-        ],
+        "show_all_applications": False,
+        "navigation": [],  # 🌟 SE DEJA VACÍO. El Middleware asignará el menú según el módulo activo.
     },
 }
