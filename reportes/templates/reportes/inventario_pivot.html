@@ -1,0 +1,245 @@
+{% extends "admin/base.html" %}
+
+{% block content %}
+<!-- DevExtreme CSS (Tema Light / Modern) -->
+<link rel="stylesheet" href="https://cdn3.devexpress.com/jslib/23.2.5/css/dx.light.css">
+
+<style>
+    /* 🌟 FORZAR A DJANGO ADMIN A OCUPAR EL 100% DEL ANCHO */
+    #content, .content, .main-content, #content-main, .container, .container-fluid {
+        max-width: 100% !important;
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    /* Estilos del PivotGrid */
+    .dx-pivotgrid {
+        background-color: #ffffff;
+        border-radius: 8px;
+    }
+    .dx-pivotgrid-border-hidden .dx-pivotgrid-area {
+        font-size: 13px;
+    }
+</style>
+
+<!-- Contenedor a Pantalla Completa (Full Width Real) -->
+<div class="w-full h-full p-4 bg-gray-50 dark:bg-gray-900">
+    <div class="flex flex-wrap justify-between items-center mb-3 px-1">
+        <div>
+            <h1 class="text-xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                📦 Análisis Empresarial de Inventario
+            </h1>
+            <p class="text-xs text-gray-500">Power Pivot Grid interactivo alimentado por DevExpress.</p>
+        </div>
+        
+        <!-- Botones interactivos nativos -->
+        <div class="flex items-center space-x-2">
+            <!-- Botón para Mostrar / Ocultar Subtotales -->
+            <div id="toggle-subtotals-btn"></div>
+            <!-- Selector de tipo de gráfico -->
+            <div id="chart-type-selector" class="hidden"></div>
+            <!-- Botón para alternar la Gráfica -->
+            <div id="toggle-chart-btn"></div>
+        </div>
+    </div>
+
+    <!-- Contenedor de la Gráfica (Oculto por defecto) -->
+    <div id="chart-container" class="hidden mb-3 p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
+        <div id="pivotgrid-chart" class="h-64 w-full"></div>
+    </div>
+
+    <!-- Tabla Dinámica DevExpress -->
+    <div id="pivotgrid" class="w-full shadow-sm rounded-lg overflow-hidden"></div>
+</div>
+
+<!-- Inyección segura de datos -->
+{{ pivot_data|json_script:"pivot-data" }}
+
+<!-- Dependencias JS Base -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+
+<!-- Librerías para exportación nativa a ExcelJS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+<!-- Dependencias JS de DevExtreme (23.2) y Diccionario en Español -->
+<script src="https://cdn3.devexpress.com/jslib/23.2.5/js/dx.all.js"></script>
+<script src="https://cdn3.devexpress.com/jslib/23.2.5/js/localization/dx.messages.es.js"></script>
+
+<script>
+    $(function() {
+        // 1. ACTIVAR TRADUCCIÓN A ESPAÑOL (México)
+        DevExpress.localization.locale("es-MX");
+
+        var rawData = JSON.parse(document.getElementById('pivot-data').textContent);
+
+        // 2. Configuración del DataSource de DevExpress
+        var pivotGridDataSource = new DevExpress.data.PivotGridDataSource({
+            fields: [
+                { dataField: "Cultivo", area: "row", sortBySummaryField: "Cantidad" },
+                { dataField: "Etiqueta", area: "row" },
+                { dataField: "Tamaño", area: "column" },
+                { 
+                    dataField: "Cantidad", 
+                    dataType: "number", 
+                    summaryType: "sum", 
+                    format: "#,##0", 
+                    area: "data" 
+                },
+                { dataField: "Color", area: "filter" },
+                { dataField: "Variedad", area: "filter" },
+                { dataField: "Fecha", area: "filter" }
+            ],
+            store: rawData
+        });
+
+        // 3. Componente de Gráfica (Sincronizada)
+        var chart = $("#pivotgrid-chart").dxChart({
+            commonSeriesSettings: {
+                type: "bar"
+            },
+            tooltip: {
+                enabled: true,
+                customizeTooltip: function(args) {
+                    return {
+                        html: args.seriesName + "<br/><b>" + args.valueText + "</b>"
+                    };
+                }
+            },
+            size: {
+                height: 260
+            },
+            adaptiveLayout: {
+                width: 450
+            }
+        }).dxChart("instance");
+
+        // 4. Componente PivotGrid
+        var showSubtotals = true;
+
+        var pivotGrid = $("#pivotgrid").dxPivotGrid({
+            allowSortingBySummary: true,
+            allowSorting: true,
+            allowFiltering: true,
+            allowExpandAll: true,
+            
+            // Altura y ancho al 100%
+            height: "calc(100vh - 130px)",
+            width: "100%",
+            scrolling: {
+                mode: "virtual"
+            },
+            
+            showBorders: true,
+            showRowTotals: true,
+            showColumnTotals: true,
+            showRowGrandTotals: true,
+            showColumnGrandTotals: true,
+            
+            fieldChooser: {
+                enabled: true,
+                allowSearch: true,
+                width: 600,
+                height: 500
+            },
+            export: {
+                enabled: true,
+                fileName: "Inventario_Pivot"
+            },
+            fieldPanel: {
+                visible: true
+            },
+            
+            // 🌟 SE DESACTIVÓ LA PERSISTENCIA PARA QUE SIEMPRE CARGUE LA CONFIGURACIÓN INICIAL POR DEFAULT
+            stateStoring: {
+                enabled: false
+            },
+            
+            onExporting: function(e) {
+                var workbook = new ExcelJS.Workbook();
+                var worksheet = workbook.addWorksheet('Inventario');
+
+                DevExpress.excelExporter.exportPivotGrid({
+                    component: e.component,
+                    worksheet: worksheet,
+                    mergeRowFieldValues: false,
+                    mergeColumnFieldValues: false
+                }).then(function() {
+                    workbook.xlsx.writeBuffer().then(function(buffer) {
+                        saveAs(new Blob([buffer], { type: 'application/octet-stream' }), 'Inventario_Pivot_Plano.xlsx');
+                    });
+                });
+                
+                e.cancel = true;
+            },
+            dataSource: pivotGridDataSource
+        }).dxPivotGrid("instance");
+
+        // 5. Enlazar automáticamente el PivotGrid a la Gráfica
+        pivotGrid.bindChart(chart, {
+            dataFieldsDisplayMode: "singleAxis",
+            behavior: "filterable"
+        });
+
+        // 6. Selector de Tipo de Gráfica
+        var chartTypeSelector = $("#chart-type-selector").dxSelectBox({
+            items: [
+                { id: "bar", name: "📊 Barras" },
+                { id: "line", name: "📈 Líneas" },
+                { id: "splineArea", name: "🏔️ Área" },
+                { id: "fullStackedBar", name: "🥞 Barras Apiladas" }
+            ],
+            valueExpr: "id",
+            displayExpr: "name",
+            value: "bar",
+            width: 150,
+            onValueChanged: function(e) {
+                chart.option("commonSeriesSettings.type", e.value);
+            }
+        }).dxSelectBox("instance");
+
+        // 7. Botón Mostrar / Ocultar Subtotales
+        var subtotalsBtn = $("#toggle-subtotals-btn").dxButton({
+            text: "Ocultar Subtotales",
+            icon: "eyeopen",
+            type: "normal",
+            stylingMode: "outlined",
+            onClick: function() {
+                showSubtotals = !showSubtotals;
+
+                pivotGrid.option("showRowTotals", showSubtotals);
+                pivotGrid.option("showColumnTotals", showSubtotals);
+
+                subtotalsBtn.option({
+                    text: showSubtotals ? "Ocultar Subtotales" : "Mostrar Subtotales",
+                    icon: showSubtotals ? "eyeopen" : "eyeclose"
+                });
+            }
+        }).dxButton("instance");
+
+        // 8. Botón Mostrar / Ocultar Gráfica
+        var chartBtn = $("#toggle-chart-btn").dxButton({
+            text: "Ver Gráfica",
+            icon: "chart",
+            type: "normal",
+            stylingMode: "outlined",
+            onClick: function() {
+                var $chartContainer = $("#chart-container");
+                var $chartTypeSelector = $("#chart-type-selector");
+
+                if ($chartContainer.hasClass("hidden")) {
+                    $chartContainer.removeClass("hidden");
+                    $chartTypeSelector.removeClass("hidden");
+                    chartBtn.option({ text: "Ocultar Gráfica", icon: "close" });
+                    chart.render();
+                } else {
+                    $chartContainer.addClass("hidden");
+                    $chartTypeSelector.addClass("hidden");
+                    chartBtn.option({ text: "Ver Gráfica", icon: "chart" });
+                }
+            }
+        }).dxButton("instance");
+    });
+</script>
+{% endblock %}

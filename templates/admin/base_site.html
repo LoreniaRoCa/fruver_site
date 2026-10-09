@@ -1,0 +1,72 @@
+{% extends "admin/base_site.html" %}
+
+{% block extrahead %}
+{{ block.super }}
+<script>
+    (function() {
+        function traducirYLimpiarUnfold() {
+            // 1. Ocultar / Eliminar el saludo "Welcome admin_rh" de la barra superior
+            document.querySelectorAll("span, div, header").forEach(function (el) {
+                if (el.children.length === 0 && el.textContent.trim().toLowerCase().includes("welcome")) {
+                    // Buscar el contenedor de la barra superior y ocultarlo
+                    let topHeaderContainer = el.closest(".border-b") || el.closest("header") || el.parentElement;
+                    if (topHeaderContainer && !topHeaderContainer.closest("#sidebar") && !topHeaderContainer.closest("nav")) {
+                        topHeaderContainer.style.display = "none";
+                    }
+                }
+            });
+
+            // 2. Traducir el botón "Run" -> "Ejecutar"
+            document.querySelectorAll("button, input[type='submit'], [type='button']").forEach(function (btn) {
+                if (btn.innerText.trim() === "Run" || btn.value === "Run") {
+                    btn.innerText = "Ejecutar";
+                    btn.value = "Ejecutar";
+                }
+            });
+
+            // 3. Traducir "Select action" -> "Seleccionar acción..."
+            document.querySelectorAll("option").forEach(function (opt) {
+                if (opt.innerText.trim() === "Select action") {
+                    opt.innerText = "Seleccionar acción...";
+                }
+            });
+
+            // 4. Traducir "Type to search" / "Type to filter" -> "Buscar..."
+            document.querySelectorAll("input[placeholder]").forEach(function (input) {
+                if (input.placeholder && input.placeholder.toLowerCase().includes("type to")) {
+                    input.placeholder = "Buscar...";
+                }
+            });
+        }
+
+        // Ejecutar inmediatamente al cargar y en mutaciones del DOM
+        document.addEventListener("DOMContentLoaded", function () {
+            traducirYLimpiarUnfold();
+            
+            const observer = new MutationObserver(function () {
+                traducirYLimpiarUnfold();
+            });
+
+            observer.observe(document.body, { childList: true, subtree: true });
+        });
+    })();
+</script>
+{% endblock %}
+
+{% block branding %}
+<div class="flex flex-col text-left leading-tight py-1">
+    <!-- Título Principal Dinámico (Lee la variable site_header configurada por el middleware) -->
+    <span class="font-bold text-sm text-gray-800 dark:text-gray-100 tracking-wide">
+        {{ site_header|default:"Portal Empresarial" }}
+    </span>
+    
+    <!-- Nombre de la Empresa completo -->
+    <span class="text-xs font-semibold text-[#5b893f] dark:text-[#72a651] whitespace-nowrap">
+        {% if empresa_activa %}
+            🏢 {{ empresa_activa.nombre }}
+        {% else %}
+            Sin empresa seleccionada
+        {% endif %}
+    </span>
+</div>
+{% endblock %}

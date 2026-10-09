@@ -1,0 +1,507 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block extrahead %}
+{{ block.super }}
+<!-- DevExtreme CSS (Tema Light) -->
+<link rel="stylesheet" href="https://cdn3.devexpress.com/jslib/23.2.5/css/dx.light.css">
+
+<style>
+    /* Full width de Django */
+    #content, .content, .main-content, #content-main, .container, .container-fluid {
+        max-width: 100% !important;
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    .dx-pivotgrid {
+        background-color: #ffffff;
+        border-radius: 8px;
+        position: relative !important;
+    }
+
+    .dx-pivotgrid-border-hidden .dx-pivotgrid-area {
+        font-size: 13px;
+    }
+
+    /* Restricción de ancho para el menú contextual */
+    body > .dx-overlay-wrapper:has(.dx-context-menu),
+    .dx-overlay-wrapper.dx-context-menu-wrapper,
+    .dx-overlay-wrapper:has(.dx-pivotgrid-context-menu) {
+        width: auto !important;
+        height: auto !important;
+        max-width: fit-content !important;
+    }
+
+    .dx-context-menu {
+        display: inline-block !important;
+        width: auto !important;
+    }
+
+    /* Menú flotante opaco y delimitado */
+    .dx-context-menu .dx-overlay-content,
+    .dx-menu-items-container {
+        background-color: #ffffff !important;
+        border: 1px solid #cbd5e1 !important;
+        width: 240px !important;
+        min-width: 220px !important;
+        max-width: 280px !important;
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.25) !important;
+        border-radius: 8px !important;
+        padding: 4px 0 !important;
+    }
+
+    .dx-context-menu .dx-menu-item-content {
+        color: #1e293b !important;
+        font-size: 13px !important;
+        padding: 8px 12px !important;
+        white-space: nowrap !important;
+    }
+
+    .dx-context-menu .dx-state-hover {
+        background-color: #f1f5f9 !important;
+    }
+
+    /* Ventana del Selector de Campos (Field Chooser) amplia */
+    .dx-pivotgridfieldchooser-popup .dx-overlay-content {
+        background-color: #ffffff !important;
+        width: 650px !important;
+        max-width: 90vw !important;
+        min-width: 550px !important;
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.25) !important;
+        border-radius: 10px !important;
+        border: 1px solid #cbd5e1 !important;
+    }
+
+    /* Filtros compactos multi-fila */
+    .dx-pivotgrid-field-panel {
+        white-space: normal !important;
+        overflow: visible !important;
+    }
+
+    .dx-pivotgrid-fields-container {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        white-space: normal !important;
+        gap: 4px !important;
+        padding-right: 90px !important;
+    }
+
+    .dx-pivotgrid-filter-fields {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        gap: 4px !important;
+        align-items: center !important;
+    }
+
+    .dx-pivotgrid-fields-container .dx-pivotgrid-field {
+        margin-bottom: 3px !important;
+        margin-right: 3px !important;
+    }
+
+    .dx-pivotgrid .dx-pivotgrid-toolbar {
+        position: absolute !important;
+        top: 6px !important;
+        right: 10px !important;
+        z-index: 30 !important;
+        background: transparent !important;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="w-full h-full p-4 bg-gray-50 dark:bg-gray-900">
+    <!-- Encabezado de Titulo -->
+    <div class="flex flex-wrap justify-between items-center mb-2 px-1 gap-2">
+        <div>
+            <h1 class="text-xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                📊 {{ titulo_reporte }}
+            </h1>
+            <p class="text-xs text-gray-500">Power Pivot Grid interactivo alimentado por DevExpress.</p>
+        </div>
+        
+        <div class="flex items-center space-x-2">
+            <div id="toggle-subtotals-btn"></div>
+            <div id="chart-type-selector" class="hidden"></div>
+            <div id="toggle-chart-btn"></div>
+        </div>
+    </div>
+
+    <!-- BARRA DE HERRAMIENTAS ESTILO WINFORMS (PLANTILLA + FECHAS + GUARDAR) -->
+    <div class="bg-white dark:bg-gray-800 p-2.5 rounded-lg border border-gray-200 dark:border-gray-700 mb-3 shadow-sm flex flex-wrap items-center justify-between gap-3">
+        <div class="flex flex-wrap items-center gap-3">
+            <!-- Combo de Plantillas -->
+            <div class="flex items-center gap-2">
+                <span class="text-xs font-bold text-gray-700 dark:text-gray-300">Plantilla:</span>
+                <div id="combo-plantillas" class="w-64"></div>
+            </div>
+
+            <!-- Rango de Fechas -->
+            <div class="flex items-center gap-2 border-l pl-3 border-gray-300 dark:border-gray-600">
+                <span class="text-xs font-bold text-gray-700 dark:text-gray-300">Del:</span>
+                <div id="fecha-inicio" class="w-32"></div>
+                <span class="text-xs font-bold text-gray-700 dark:text-gray-300">Al:</span>
+                <div id="fecha-fin" class="w-32"></div>
+            </div>
+
+            <!-- Botón Actualizar Consulta -->
+            <div id="btn-actualizar-datos"></div>
+        </div>
+
+        <!-- Acciones de Guardado de Vistas -->
+        <div class="flex items-center gap-2">
+            <div id="btn-guardar-plantilla"></div>
+            <div id="btn-nueva-plantilla"></div>
+        </div>
+    </div>
+
+    <!-- Contenedor de Gráfica -->
+    <div id="chart-container" class="hidden mb-3 p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
+        <div id="pivotgrid-chart" class="h-64 w-full"></div>
+    </div>
+
+    <!-- Tabla Dinámica DevExpress -->
+    <div id="pivotgrid" class="w-full shadow-sm rounded-lg overflow-hidden"></div>
+</div>
+
+<!-- Inyección segura de JSON y Variables desde Django -->
+{{ datos_json|json_script:"datos-json-data" }}
+{{ configuracion_pivot|json_script:"config-pivot-data" }}
+{{ plantillas_usuario|json_script:"plantillas-usuario-data" }}
+{{ reporte_id|default:0|json_script:"reporte-id-data" }}
+
+<script id="urls-data" type="application/json">
+    {
+        "guardarPlantillaUrl": "{% url 'reportes:guardar_plantilla_pivot' %}"
+    }
+</script>
+
+<input type="hidden" id="csrf-token-input" value="{{ csrf_token }}">
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+<script src="https://cdn3.devexpress.com/jslib/23.2.5/js/dx.all.js"></script>
+<script src="https://cdn3.devexpress.com/jslib/23.2.5/js/localization/dx.messages.es.js"></script>
+
+<script>
+    function calcularFechaMacro(token) {
+        if (!token) return new Date();
+        token = token.trim();
+
+        let hoy = new Date();
+        let year = hoy.getFullYear();
+        let month = hoy.getMonth();
+
+        if (token === "A1") return new Date(year, 0, 1);
+        if (token === "a") return new Date(year, 11, 31);
+        if (token === "-1a") return new Date(year - 1, 0, 1);
+        if (token === "M") return new Date(year, month, 1);
+        if (token === "m") return new Date(year, month + 1, 0);
+        if (token === "Hoy" || token === "D") return hoy;
+
+        let matchMeses = token.match(/^([+-]?\d+)m$/i);
+        if (matchMeses) {
+            let diffMeses = parseInt(matchMeses[1]);
+            return new Date(year, month + diffMeses, 1);
+        }
+
+        let matchDias = token.match(/^([+-]?\d+)d$/i);
+        if (matchDias) {
+            let diffDias = parseInt(matchDias[1]);
+            let res = new Date();
+            res.setDate(hoy.getDate() + diffDias);
+            return res;
+        }
+
+        let fechaDirecta = new Date(token);
+        return isNaN(fechaDirecta.getTime()) ? hoy : fechaDirecta;
+    }
+
+    $(function() {
+        DevExpress.localization.locale("es-MX");
+
+        const reporteId = JSON.parse(document.getElementById('reporte-id-data').textContent);
+        const csrfToken = document.getElementById('csrf-token-input').value;
+        const rawData = JSON.parse(document.getElementById('datos-json-data').textContent);
+        const rawConfig = JSON.parse(document.getElementById('config-pivot-data').textContent);
+        const plantillasUsuario = JSON.parse(document.getElementById('plantillas-usuario-data').textContent || '[]');
+        
+        const urlsData = JSON.parse(document.getElementById('urls-data').textContent);
+        const urlGuardarPlantilla = urlsData.guardarPlantillaUrl;
+
+        let customFields = Array.isArray(rawConfig) ? rawConfig : (rawConfig ? rawConfig.Fields : null);
+
+        let areaMap = {
+            "FilterArea": "filter",
+            "RowArea": "row",
+            "ColumnArea": "column",
+            "DataArea": "data"
+        };
+
+        let pivotFields = (customFields || []).map(function(f) {
+            let fieldObj = Object.assign({}, f);
+
+            fieldObj.dataField = f.dataField || f.FieldName;
+            fieldObj.caption = f.caption || f.Caption;
+
+            let rawArea = f.area || f.Area;
+            let mappedArea = areaMap[rawArea] || rawArea;
+
+            let isOriginallyHidden = (f.visible === false || f.Visible === false);
+
+            if (isOriginallyHidden) {
+                fieldObj.area = undefined;
+                fieldObj.visible = true;
+
+                const sampleVal = rawData.length > 0 ? rawData[0][fieldObj.dataField] : null;
+                const isNumeric = (typeof sampleVal === 'number');
+
+                if (isNumeric) {
+                    fieldObj.isMeasure = true;
+                    fieldObj.summaryType = f.summaryType || "sum";
+                    fieldObj.format = f.format || "#,##0.00";
+                } else {
+                    fieldObj.isMeasure = false;
+                }
+            } else {
+                fieldObj.area = mappedArea || "filter";
+                fieldObj.visible = true;
+                if (fieldObj.area === "data") {
+                    fieldObj.summaryType = f.summaryType || "sum";
+                }
+            }
+
+            return fieldObj;
+        });
+
+        var pivotGridDataSource = new DevExpress.data.PivotGridDataSource({
+            fields: pivotFields,
+            store: rawData
+        });
+
+        var pivotGrid = $("#pivotgrid").dxPivotGrid({
+            allowSortingBySummary: true,
+            allowSorting: true,
+            allowFiltering: true,
+            allowExpandAll: true,
+
+            dataFieldArea: "column",
+            height: "calc(100vh - 180px)",
+            width: "100%",
+
+            scrolling: { mode: "virtual" },
+
+            showBorders: true,
+            showRowTotals: true,
+            showColumnTotals: true,
+            showRowGrandTotals: true,
+            showColumnGrandTotals: true,
+
+            fieldChooser: {
+                enabled: true,
+                allowSearch: true,
+                width: 650,
+                height: 550,
+                layout: 0,
+                applyValueMode: "onApply"
+            },
+
+            export: {
+                enabled: true,
+                fileName: "reporte_pivot"
+            },
+
+            fieldPanel: {
+                visible: true,
+                showFilterFields: true,
+                showColumnFields: true,
+                showRowFields: true,
+                showDataFields: false,
+                allowFieldDragging: true
+            },
+
+            stateStoring: { enabled: false },
+
+            dataSource: pivotGridDataSource
+        }).dxPivotGrid("instance");
+
+        var dateBoxInicio = $("#fecha-inicio").dxDateBox({
+            type: "date",
+            displayFormat: "dd/MM/yyyy",
+            value: plantillasUsuario.length > 0 ? calcularFechaMacro(plantillasUsuario[0].fecha_inicio_macro) : calcularFechaMacro("-3m")
+        }).dxDateBox("instance");
+
+        var dateBoxFin = $("#fecha-fin").dxDateBox({
+            type: "date",
+            displayFormat: "dd/MM/yyyy",
+            value: plantillasUsuario.length > 0 ? calcularFechaMacro(plantillasUsuario[0].fecha_fin_macro) : calcularFechaMacro("m")
+        }).dxDateBox("instance");
+
+        var comboPlantillas = $("#combo-plantillas").dxSelectBox({
+            items: plantillasUsuario,
+            displayExpr: "nombre_plantilla",
+            valueExpr: "id",
+            value: plantillasUsuario.length > 0 ? plantillasUsuario[0].id : null,
+            onValueChanged: function(e) {
+                var selectedItem = e.component.option("selectedItem");
+                if (selectedItem) {
+                    dateBoxInicio.option("value", calcularFechaMacro(selectedItem.fecha_inicio_macro || "-3m"));
+                    dateBoxFin.option("value", calcularFechaMacro(selectedItem.fecha_fin_macro || "m"));
+
+                    if (selectedItem.configuracion_pivot) {
+                        var stateObj = typeof selectedItem.configuracion_pivot === "string" 
+                            ? JSON.parse(selectedItem.configuracion_pivot) 
+                            : selectedItem.configuracion_pivot;
+                        
+                        pivotGrid.getDataSource().state(stateObj);
+                    }
+                }
+            }
+        }).dxSelectBox("instance");
+
+        $("#btn-actualizar-datos").dxButton({
+            text: "Actualizar",
+            icon: "refresh",
+            type: "default",
+            onClick: function() {
+                var fInicio = dateBoxInicio.option("value");
+                var fFin = dateBoxFin.option("value");
+                
+                var formatInicio = DevExpress.localization.formatDate(fInicio, "yyyy-MM-dd");
+                var formatFin = DevExpress.localization.formatDate(fFin, "yyyy-MM-dd");
+
+                var url = new URL(window.location.href);
+                url.searchParams.set("fecha_inicio", formatInicio);
+                url.searchParams.set("fecha_fin", formatFin);
+                window.location.href = url.toString();
+            }
+        });
+
+        $("#btn-guardar-plantilla").dxButton({
+            text: "Guardar",
+            icon: "save",
+            type: "success",
+            onClick: function() {
+                var plantillaActual = comboPlantillas.option("selectedItem");
+                var nombre = plantillaActual ? plantillaActual.nombre_plantilla : "Mi Plantilla";
+
+                if (!plantillaActual || plantillaActual.es_default) {
+                    nombre = prompt("Ingrese el nombre para la nueva plantilla:", "Mi Vista Personalizada");
+                    if (!nombre) return;
+                }
+
+                var currentState = pivotGrid.getDataSource().state();
+
+                fetch(urlGuardarPlantilla, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRFToken": csrfToken
+                    },
+                    body: JSON.stringify({
+                        reporte_id: reporteId,
+                        nombre_plantilla: nombre,
+                        configuracion_pivot: currentState
+                    })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === "success") {
+                        DevExpress.ui.notify("Plantilla guardada exitosamente", "success", 3000);
+                        setTimeout(() => window.location.reload(), 1000);
+                    } else {
+                        DevExpress.ui.notify("Error: " + data.message, "error", 4000);
+                    }
+                });
+            }
+        });
+
+        $("#btn-nueva-plantilla").dxButton({
+            text: "Guardar Como...",
+            icon: "add",
+            type: "normal",
+            onClick: function() {
+                var nombre = prompt("Nombre para la nueva plantilla:", "Nueva Vista");
+                if (!nombre) return;
+
+                var currentState = pivotGrid.getDataSource().state();
+
+                fetch(urlGuardarPlantilla, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRFToken": csrfToken
+                    },
+                    body: JSON.stringify({
+                        reporte_id: reporteId,
+                        nombre_plantilla: nombre,
+                        configuracion_pivot: currentState
+                    })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === "success") {
+                        DevExpress.ui.notify("Nueva plantilla creada", "success", 3000);
+                        setTimeout(() => window.location.reload(), 1000);
+                    } else {
+                        DevExpress.ui.notify("Error: " + data.message, "error", 4000);
+                    }
+                });
+            }
+        });
+
+        var chart = $("#pivotgrid-chart").dxChart({
+            commonSeriesSettings: { type: "bar" },
+            tooltip: {
+                enabled: true,
+                customizeTooltip: function(args) {
+                    return { html: args.seriesName + "<br/><b>" + args.valueText + "</b>" };
+                }
+            },
+            size: { height: 260 },
+            adaptiveLayout: { width: 450 }
+        }).dxChart("instance");
+
+        pivotGrid.bindChart(chart, {
+            dataFieldsDisplayMode: "singleAxis",
+            behavior: "filterable"
+        });
+
+        var subtotalsBtn = $("#toggle-subtotals-btn").dxButton({
+            text: "Ocultar Subtotales",
+            icon: "eyeopen",
+            type: "normal",
+            stylingMode: "outlined",
+            onClick: function() {
+                var showSubtotals = !pivotGrid.option("showRowTotals");
+                pivotGrid.option("showRowTotals", showSubtotals);
+                pivotGrid.option("showColumnTotals", showSubtotals);
+                subtotalsBtn.option({
+                    text: showSubtotals ? "Ocultar Subtotales" : "Mostrar Subtotales",
+                    icon: showSubtotals ? "eyeopen" : "eyeclose"
+                });
+            }
+        }).dxButton("instance");
+
+        var chartBtn = $("#toggle-chart-btn").dxButton({
+            text: "Ver Gráfica",
+            icon: "chart",
+            type: "normal",
+            stylingMode: "outlined",
+            onClick: function() {
+                var $chartContainer = $("#chart-container");
+                if ($chartContainer.hasClass("hidden")) {
+                    $chartContainer.removeClass("hidden");
+                    chartBtn.option({ text: "Ocultar Gráfica", icon: "close" });
+                    chart.render();
+                } else {
+                    $chartContainer.addClass("hidden");
+                    chartBtn.option({ text: "Ver Gráfica", icon: "chart" });
+                }
+            }
+        }).dxButton("instance");
+    });
+</script>
+{% endblock %}

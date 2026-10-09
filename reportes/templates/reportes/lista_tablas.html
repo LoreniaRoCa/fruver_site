@@ -1,0 +1,19 @@
+HTML
+{% extends 'admin/base_site.html' %}
+{% load i18n static %}
+
+{% block title %}Tablas Dinámicas | {{ site_title|default:_('Django site admin') }}{% endblock %}
+
+{% block content %}
+<div class="w-full h-full p-8 bg-gray-50 dark:bg-gray-900 flex flex-col items-center justify-center text-center min-h-[70vh]">
+    <div class="p-4 bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 rounded-full mb-4">
+        <span class="material-symbols-outlined text-5xl">bar_chart</span>
+    </div>
+    <h1 class="text-2xl font-bold text-gray-800 dark:text-white mb-2">
+        Tablas Dinámicas y Reportes
+    </h1>
+    <p class="text-sm text-gray-500 dark:text-gray-400 max-w-md">
+        Selecciona uno de los reportes del menú lateral izquierdo para comenzar a analizar, filtrar y exportar tu información.
+    </p>
+</div>
+{% endblock %}
