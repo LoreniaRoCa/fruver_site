@@ -186,9 +186,11 @@
 <script src="https://cdn3.devexpress.com/jslib/23.2.5/js/localization/dx.messages.es.js"></script>
 
 <script>
+    const URL_GUARDAR_PLANTILLA = "{% url 'reportes:guardar_plantilla_pivot' %}";
+
     function calcularFechaMacro(token) {
         if (!token) return new Date();
-        token = token.trim();
+        token = String(token).trim();
 
         let hoy = new Date();
         let year = hoy.getFullYear();
@@ -379,6 +381,54 @@
             }
         });
 
+        // 🌟 FUNCIÓN AUXILIAR REUTILIZABLE PARA ENVIAR A LA API EN SUPABASE/DJANGO 🌟
+        function enviarPlantillaServidor(nombre) {
+            var currentState = pivotGrid.getDataSource().state();
+            var fInicio = dateBoxInicio.option("value");
+            var fFin = dateBoxFin.option("value");
+            
+            var macroInicioStr = DevExpress.localization.formatDate(fInicio, "yyyy-MM-dd");
+            var macroFinStr = DevExpress.localization.formatDate(fFin, "yyyy-MM-dd");
+
+            DevExpress.ui.notify("Guardando plantilla...", "info", 1500);
+
+            // Se hace la petición a la constante declarada
+            fetch(URL_GUARDAR_PLANTILLA, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": csrfToken
+                },
+                body: JSON.stringify({
+                    reporte_id: reporteId,
+                    nombre_plantilla: nombre,
+                    configuracion_pivot: currentState,
+                    fecha_inicio_macro: macroInicioStr,
+                    fecha_fin_macro: macroFinStr
+                })
+            })
+            .then(function(res) {
+                if (!res.ok) {
+                    throw new Error("Respuesta del servidor (" + res.status + "): " + res.statusText);
+                }
+                return res.json();
+            })
+            .then(function(data) {
+                if (data.status === "success") {
+                    DevExpress.ui.notify("Plantilla '" + nombre + "' guardada con éxito", "success", 3000);
+                    setTimeout(function() {
+                        window.location.reload();
+                    }, 800);
+                } else {
+                    DevExpress.ui.notify("Error: " + (data.message || "No se pudo guardar"), "error", 4000);
+                }
+            })
+            .catch(function(err) {
+                console.error("Error al guardar plantilla:", err);
+                DevExpress.ui.notify("Error: " + err.message, "error", 4000);
+            });
+        }
+
         $("#btn-guardar-plantilla").dxButton({
             text: "Guardar",
             icon: "save",
@@ -388,33 +438,11 @@
                 var nombre = plantillaActual ? plantillaActual.nombre_plantilla : "Mi Plantilla";
 
                 if (!plantillaActual || plantillaActual.es_default) {
-                    nombre = prompt("Ingrese el nombre para la nueva plantilla:", "Mi Vista Personalizada");
-                    if (!nombre) return;
+                    nombre = prompt("Ingrese el nombre para guardar la plantilla:", "Mi Vista Personalizada");
+                    if (!nombre || nombre.trim() === "") return;
                 }
 
-                var currentState = pivotGrid.getDataSource().state();
-
-                fetch(urlGuardarPlantilla, {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "X-CSRFToken": csrfToken
-                    },
-                    body: JSON.stringify({
-                        reporte_id: reporteId,
-                        nombre_plantilla: nombre,
-                        configuracion_pivot: currentState
-                    })
-                })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.status === "success") {
-                        DevExpress.ui.notify("Plantilla guardada exitosamente", "success", 3000);
-                        setTimeout(() => window.location.reload(), 1000);
-                    } else {
-                        DevExpress.ui.notify("Error: " + data.message, "error", 4000);
-                    }
-                });
+                enviarPlantillaServidor(nombre.trim());
             }
         });
 
@@ -424,31 +452,9 @@
             type: "normal",
             onClick: function() {
                 var nombre = prompt("Nombre para la nueva plantilla:", "Nueva Vista");
-                if (!nombre) return;
+                if (!nombre || nombre.trim() === "") return;
 
-                var currentState = pivotGrid.getDataSource().state();
-
-                fetch(urlGuardarPlantilla, {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "X-CSRFToken": csrfToken
-                    },
-                    body: JSON.stringify({
-                        reporte_id: reporteId,
-                        nombre_plantilla: nombre,
-                        configuracion_pivot: currentState
-                    })
-                })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.status === "success") {
-                        DevExpress.ui.notify("Nueva plantilla creada", "success", 3000);
-                        setTimeout(() => window.location.reload(), 1000);
-                    } else {
-                        DevExpress.ui.notify("Error: " + data.message, "error", 4000);
-                    }
-                });
+                enviarPlantillaServidor(nombre.trim());
             }
         });
 
