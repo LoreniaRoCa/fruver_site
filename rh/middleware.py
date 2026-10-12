@@ -17,14 +17,12 @@ class RestringirAccesoAdminMiddleware:
     def __call__(self, request):
         path = request.path.lower()
 
-        # -------------------------------------------------------------
-        # 1. Módulo Seguridad del Sitio (Usuarios, Grupos, Permisos)
-        # -------------------------------------------------------------
+        # 1. Módulo Seguridad del Sitio
         if any(k in path for k in ['/admin/auth/', '/auth/', '/user/', '/group/']):
             titulo_modulo = "Seguridad del Sitio"
             settings.UNFOLD["SITE_HEADER"] = titulo_modulo
             settings.UNFOLD["SITE_TITLE"] = titulo_modulo
-            admin_site.site_header = titulo_modulo  # 🌟 Sobrescribe el objeto AdminSite
+            admin_site.site_header = titulo_modulo
             admin_site.site_title = titulo_modulo
 
             if request.user.is_authenticated and request.user.is_superuser:
@@ -32,9 +30,7 @@ class RestringirAccesoAdminMiddleware:
             else:
                 settings.UNFOLD["SIDEBAR"]["navigation"] = getattr(settings, 'NAV_RECURSOS_HUMANOS', [])
 
-        # -------------------------------------------------------------
-        # 2. Módulo Tablas Dinámicas (CONSTRUCCIÓN DINÁMICA DESDE BD)
-        # -------------------------------------------------------------
+        # 2. Módulo Tablas Dinámicas
         elif any(k in path for k in ['/reportes/', 'pivot']):
             titulo_modulo = "Tablas Dinámicas"
             settings.UNFOLD["SITE_HEADER"] = titulo_modulo
@@ -42,7 +38,6 @@ class RestringirAccesoAdminMiddleware:
             admin_site.site_header = titulo_modulo
             admin_site.site_title = titulo_modulo
 
-            # Cargar dinámicamente las opciones desde la BD
             items_reportes = []
             try:
                 reportes_db = Pivot_Dinamico.objects.filter(activo=True).order_by('orden', 'nombre')
@@ -55,7 +50,6 @@ class RestringirAccesoAdminMiddleware:
             except Exception:
                 items_reportes = []
 
-            # Colocar las opciones en la barra lateral izquierda (SIDEBAR)
             settings.UNFOLD["SIDEBAR"]["navigation"] = [
                 {
                     "title": "Tablas Dinámicas y Reportes",
@@ -63,10 +57,9 @@ class RestringirAccesoAdminMiddleware:
                     "items": items_reportes,
                 }
             ]
-        # -------------------------------------------------------------
-        # 3. Dashboard Principal
-        # -------------------------------------------------------------
-        elif '/admin/dashboard/' in path or path in ['/admin/', '/admin']:
+
+        # 3. Dashboard Principal (Portal Empresarial)
+        elif path in ['/admin/dashboard/', '/admin/dashboard']:
             titulo_modulo = "Portal Empresarial"
             settings.UNFOLD["SITE_HEADER"] = titulo_modulo
             settings.UNFOLD["SITE_TITLE"] = titulo_modulo
@@ -74,11 +67,8 @@ class RestringirAccesoAdminMiddleware:
             admin_site.site_title = titulo_modulo
 
             settings.UNFOLD["SIDEBAR"]["navigation"] = []
-
-        # -------------------------------------------------------------
-        # 4. Módulo Recursos Humanos (Evaluaciones y Catálogos)
-        # -------------------------------------------------------------
-        else:
+        # 4. Módulo Recursos Humanos
+        elif '/admin/rh/' in path or any(k in path for k in ['evaluacion', 'empleado', 'puesto', 'departamento', 'competencia', 'resumen', 'panel']):
             titulo_modulo = "Recursos Humanos"
             settings.UNFOLD["SITE_HEADER"] = titulo_modulo
             settings.UNFOLD["SITE_TITLE"] = titulo_modulo
@@ -87,9 +77,12 @@ class RestringirAccesoAdminMiddleware:
 
             settings.UNFOLD["SIDEBAR"]["navigation"] = getattr(settings, 'NAV_RECURSOS_HUMANOS', [])
 
+        else:
+            settings.UNFOLD["SIDEBAR"]["navigation"] = []
+
+        # 🌟 OBLIGATORIO: Generar y retornar la respuesta HTTP a Django
         response = self.get_response(request)
         return response
-
 def obtener_nav_tablas_dinamicas():
     """
     Consulta la tabla rep_pivot_dinamico en la BD 

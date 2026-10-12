@@ -21,15 +21,20 @@ from rh import views  # <-- ESTA ES LA LÍNEA MÁGICA QUE FALTABA
 from rh.admin import admin_site, procesar_evaluaciones_loading_view
 from rh.views import probar_correo_view, CustomAdminLoginView, dashboard_modulos_view
 urlpatterns = [
-    path('', RedirectView.as_view(url='admin/', permanent=False)),
+    path('', RedirectView.as_view(url='/admin/dashboard/', permanent=False)),
     path('redireccionar-login/', views.redireccionar_segun_rol, name='redireccionar_login'),
     path('probar-correo/', probar_correo_view, name='probar_correo'),
 
-    # --- Módulo de Reportes & BI ---
     path('reportes/', include('reportes.urls', namespace='reportes')),
     
-    # --- Rutas de Administración y Recursos Humanos (SE CONSERVAN TODAS) ---
     path('admin/login/', CustomAdminLoginView.as_view(), name='login'),
+    path('admin/dashboard/', dashboard_modulos_view, name='dashboard_modulos'),
+    
+    # 🌟 REDIRECCIÓN: Si el usuario escribe /admin/ o /admin en la URL
+    path('admin/', RedirectView.as_view(url='/admin/dashboard/', permanent=False)),
+
+    path('admin/rh/dashboard/', admin_site.admin_view(admin_site.index), name='rh_dashboard'),
+
     path('admin/descargar-plantilla/<str:model_name>/', views.descargar_plantilla_excel, name='descargar_plantilla'),
     path('evaluaciones/asignacion-competencias/exportar/', views.exportar_competencias_excel, name='exportar_competencias_excel'),
     path('admin/resumen-evaluaciones/excel-detalle/', views.exportar_detalle_competencias_excel, name='exportar_detalle_competencias_excel'),    
@@ -41,17 +46,10 @@ urlpatterns = [
 
     path('admin/procesar-evaluaciones-loading/<str:session_key>/', admin_site.admin_view(procesar_evaluaciones_loading_view), name='procesar_evaluaciones_loading'),
 
-    # Acceso de correo a personal a evaluar
     path('evaluacion/acceso/<uuid:token_uuid>/', views.acceso_magico_view, name='acceso_magico'),
     path('evaluacion/guardar/', views.guardar_evaluacion_view, name='guardar_evaluacion'),
     path('cerrar-sesion/', views.cerrar_sesion_view, name='cerrar_sesion'),
 
-    # 🌟 NUEVA RUTA PRINCIPAL AL DASHBOARD DE MÓDULOS
-    path('admin/dashboard/', dashboard_modulos_view, name='dashboard_modulos'),
-
-    # En lugar de redirigir a evaluacion, redirige al dashboard de módulos
-    path('admin/', RedirectView.as_view(url='/admin/dashboard/', permanent=False)),
-
-    # Registro final del admin
-    path('admin/', admin_site.urls),
+    # Se monta el sitio con un prefijo para incluir todas las rutas internas de los modelos
+    path('admin/site/', admin_site.urls),
 ]

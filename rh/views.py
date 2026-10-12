@@ -1202,20 +1202,19 @@ def probar_correo_view(request):
 # @login_required  # Protege la vista dentro del sistema
 # views.py
 # rh/views.py
-
 @login_required
 def dashboard_modulos_view(request):
     modulos = [
         {
             "titulo": "Recursos Humanos",
             "descripcion": "Gestión de evaluaciones de desempeño, empleados, puestos y competencias.",
-            "url": "/admin/rh/evaluacion/",
+            "url": "/admin/rh/dashboard/",  # 👈 Apunta al dashboard con menú de RH
             "solo_superuser": False
         },
         {
             "titulo": "Tablas Dinámicas",
             "descripcion": "Análisis interactivo de información y reportes ejecutivos.",
-            "url": "/reportes/tablas/",  # 👈 Apunta al landing limpio con el menú lateral activo
+            "url": "/reportes/tablas/",
             "solo_superuser": False
         },
         {
@@ -1229,4 +1228,4 @@ def dashboard_modulos_view(request):
     if not request.user.is_superuser:
         modulos = [m for m in modulos if not m["solo_superuser"]]
 
-    return render(request, "admin/index.html", {"modulos": modulos})
+    return render(request, "admin/dashboard_modulos.html", {"modulos": modulos})

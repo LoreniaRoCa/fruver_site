@@ -36,7 +36,7 @@ class CustomActionForm(ActionForm):
 
 
 class CustomAdminSite(UnfoldAdminSite):
-    index_template = "admin/index.html"
+    index_template = "admin/index_dashboard.html"
 
     def each_context(self, request):
         context = super().each_context(request)
