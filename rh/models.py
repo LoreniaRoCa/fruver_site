@@ -112,7 +112,8 @@ class Empleado(models.Model):
         models.SET_NULL, 
         db_column='id_departamento', 
         blank=True, 
-        null=True
+        null=True,
+        verbose_name="Departamento",
     )
     
     # AUTORELACIÓN: Un empleado reporta a otro empleado (su jefe directo)
@@ -128,7 +129,8 @@ class Empleado(models.Model):
     id_puesto = models.ForeignKey(
         'Puesto', 
         models.DO_NOTHING, 
-        db_column='id_puesto'
+        db_column='id_puesto',
+        verbose_name="Puesto",
     )
     
     # LA SOLUCIÓN: Saber si lidera el departamento al que está asignado
@@ -168,6 +170,10 @@ class Empleado(models.Model):
         null=True, 
         blank=True, 
         db_column='empresa'
+    )
+    debe_cambiar_password = models.BooleanField(
+        default=True, 
+        help_text="Si es True, obliga al usuario a cambiar su contraseña al iniciar sesión."
     )
     class Meta:
         managed = True

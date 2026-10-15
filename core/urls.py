@@ -21,6 +21,7 @@ from rh import views  # <-- ESTA ES LA LÍNEA MÁGICA QUE FALTABA
 from rh.admin import admin_site, procesar_evaluaciones_loading_view
 from rh.views import probar_correo_view, CustomAdminLoginView, dashboard_modulos_view
 urlpatterns = [
+
     path('', RedirectView.as_view(url='/admin/dashboard/', permanent=False)),
     path('redireccionar-login/', views.redireccionar_segun_rol, name='redireccionar_login'),
     path('probar-correo/', probar_correo_view, name='probar_correo'),
@@ -44,6 +45,12 @@ urlpatterns = [
     path('admin/panel-evaluacion/<int:subordinado_id>/', views.panel_evaluacion_view, name='panel_evaluacion_subordinado'),
     path('admin/asignacion-competencias/', views.asignacion_competencias_view, name='asignacion_competencias'),
 
+    # 🔒 RUTA PARA EL CAMBIO DE CONTRASEÑA OBLIGATORIO
+    path('cambiar-password-obligatorio/', views.cambiar_password_obligatorio, name='cambiar_password_obligatorio'),
+
+    # 🌟 REDIRECCIÓN: Si el usuario escribe /admin/ o /admin en la URL
+    path('admin/', RedirectView.as_view(url='/admin/dashboard/', permanent=False)),
+
     path('admin/procesar-evaluaciones-loading/<str:session_key>/', admin_site.admin_view(procesar_evaluaciones_loading_view), name='procesar_evaluaciones_loading'),
 
     path('evaluacion/acceso/<uuid:token_uuid>/', views.acceso_magico_view, name='acceso_magico'),
@@ -51,5 +58,6 @@ urlpatterns = [
     path('cerrar-sesion/', views.cerrar_sesion_view, name='cerrar_sesion'),
 
     # Se monta el sitio con un prefijo para incluir todas las rutas internas de los modelos
-    path('admin/site/', admin_site.urls),
+    #path('admin/site/', admin_site.urls),
+    path('admin/', admin_site.urls),
 ]

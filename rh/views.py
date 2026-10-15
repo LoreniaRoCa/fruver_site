@@ -23,6 +23,10 @@ import pygwalker as pyg
 from django.db import connection
 from reportes.models import Pivot_Dinamico
 from django.utils.text import slugify
+from django.shortcuts import render, redirect
+from django.contrib.auth import update_session_auth_hash
+from django.contrib.auth.forms import PasswordChangeForm
+from django.contrib.auth import login as auth_login
 # 💡 INCLUSIÓN: Importamos el nuevo modelo de la tabla intermedia
 from .models import (
     Empleado, CompetenciaClasificacion, Competencia, Evaluacion, 
@@ -35,19 +39,24 @@ from django.utils import timezone
 class CustomAdminLoginView(LoginView):
     template_name = "admin/login.html"
 
-    # 1. Enviamos el catálogo de empresas a la plantilla
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['empresas_disponibles'] = Empresa.objects.filter(activa=True)
         return context
 
-    # 2. Al validar las credenciales del usuario, guardamos la empresa en la sesión
     def form_valid(self, form):
+        # 1. Guardar la empresa seleccionada en la sesión
         empresa_id = self.request.POST.get('empresa_id')
         if empresa_id:
             self.request.session['empresa_id'] = empresa_id
-        return super().form_valid(form)
+            self.request.session['empresa_activa'] = empresa_id
 
+        # 2. Iniciar sesión formalmente en Django
+        auth_login(self.request, form.get_user())
+
+        # 3. Redirigir a 'redireccionar_login' para que el Middleware evalúe si debe cambiar la clave
+        return redirect('redireccionar_login')
+        
 def cerrar_sesion_view(request):
     """Cierra la sesión activa del usuario y limpia las cookies."""
     logout(request)
@@ -55,11 +64,14 @@ def cerrar_sesion_view(request):
 
 @login_required
 def redireccionar_segun_rol(request):
-    """Redirige al dashboard admin si es superusuario, o al panel de evaluación si es empleado."""
-    if request.user.is_superuser:
-        return redirect('/admin/')
-    
-    return redirect('/admin/panel-evaluacion/')
+    """Redirige directamente al portal de módulos para todos los usuarios."""
+    return redirect('dashboard_modulos')
+
+# @login_required
+# def redireccionar_segun_rol(request):
+#     if request.user.is_superuser:
+#         return redirect('/admin/')
+#     return redirect('/admin/panel-evaluacion/')
 
 @login_required
 def panel_evaluacion_view(request, subordinado_id=None):
@@ -243,14 +255,33 @@ def panel_evaluacion_view(request, subordinado_id=None):
 @login_required
 def guardar_evaluacion_view(request):
     if request.method == "POST":
+        empresa_activa = request.session.get('empresa_activa') or request.session.get('empresa_id')        
+
+        #1. Obtener al evaluador considerando la empresa activa
         try:
-            evaluador = Empleado.objects.get(user=request.user)
+            filtros_evaluador = {'user': request.user}
+            if empresa_activa:
+                filtros_evaluador['empresa_id'] = empresa_activa
+            evaluador = Empleado.objects.get(**filtros_evaluador)
         except Empleado.DoesNotExist:
-            messages.error(request, "Error: Tu usuario no está ligado a un empleado.")
-            return redirect('admin:index')
+            # Respaldo en caso de que el usuario pertenezca a otra empresa en la base de datos
+            evaluador = Empleado.objects.filter(user=request.user).first()
+            if not evaluador:
+                messages.error(request, "Error: Tu usuario no está ligado a un empleado.")
+                return redirect('admin:index')
 
         evaluado_id = request.POST.get("evaluado_id")
-        evaluado = get_object_or_404(Empleado, id_empleado=evaluado_id)
+
+        # 🌟 2. CORRECCIÓN DEL ERROR: Filtrar al evaluado por id_empleado Y empresa_id
+        filtros_evaluado = {'id_empleado': evaluado_id}
+        if empresa_activa:
+            filtros_evaluado['empresa_id'] = empresa_activa
+
+        # Si el evaluador tiene empresa asignada, la usamos como respaldo
+        if 'empresa_id' not in filtros_evaluado and evaluador.empresa_id:
+            filtros_evaluado['empresa_id'] = evaluador.empresa_id
+
+        evaluado = get_object_or_404(Empleado, **filtros_evaluado)
 
         evaluacion_activa = Evaluacion.objects.filter().last()
         if not evaluacion_activa:
@@ -1083,10 +1114,8 @@ def acceso_magico_view(request, token_uuid):
             usuario_django.backend = 'django.contrib.auth.backends.ModelBackend'
             login(request, usuario_django)
             
-            # Opcional: Marcar como utilizado si solo quieres que sirva una vez
-            # token.utilizado = True
-            # token.save()
-            
+            # 🌟 MARCA DE SESIÓN: Indicamos que el usuario ingresó por enlace mágico de evaluación
+            request.session['acceso_por_token'] = True
             return redirect('panel_evaluacion') # 👈 Ruta de tu panel de evaluaciones
             
     # 🌟 Si el token expiró o falló, redirigimos al login del admin personalizado usando su namespace correcto
@@ -1229,3 +1258,35 @@ def dashboard_modulos_view(request):
         modulos = [m for m in modulos if not m["solo_superuser"]]
 
     return render(request, "admin/dashboard_modulos.html", {"modulos": modulos})
+
+@login_required
+def cambiar_password_obligatorio(request):
+    empleado = getattr(request.user, 'empleado', None)
+    
+    # Si el usuario no necesita cambiar su clave, va directo a la selección de módulos
+    if not empleado or not getattr(empleado, 'debe_cambiar_password', False):
+        return redirect('dashboard_modulos')
+
+    if request.method == 'POST':
+        form = PasswordChangeForm(user=request.user, data=request.POST)
+        if form.is_valid():
+            # 1. Actualizar contraseña
+            user = form.save()
+            
+            # 2. Mantener la sesión activa
+            update_session_auth_hash(request, user)
+            
+            # 3. Desactivar bandera
+            empleado.debe_cambiar_password = False
+            empleado.save()
+
+            messages.success(request, "Tu contraseña ha sido actualizada con éxito. ¡Bienvenido!")
+            
+            # 4. Redirigir al portal de los 3 módulos
+            return redirect('dashboard_modulos')
+        else:
+            messages.error(request, "Por favor corrige los errores indicados a continuación.")
+    else:
+        form = PasswordChangeForm(user=request.user)
+
+    return render(request, 'rh/cambiar_password_obligatorio.html', {'form': form})

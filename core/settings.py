@@ -79,6 +79,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     # 🟢 Tu nuevo middleware de restricción de menú:
     'rh.middleware.RestringirAccesoAdminMiddleware',
+    'rh.middleware.ForzarCambioPasswordMiddleware',
 ]
 
 ROOT_URLCONF = 'core.urls'
@@ -244,33 +245,33 @@ NAV_RECURSOS_HUMANOS = [
         "items": [
             {
                 "title": "Empleados",
-                "link": "/admin/rh/empleado/",
+                "link": reverse_lazy("custom_admin:rh_empleado_changelist"),
                 "icon": "people",
             },
             {
                 "title": "Puestos",
-                "link": "/admin/rh/puesto/",
+                "link": reverse_lazy("custom_admin:rh_puesto_changelist"),
                 "icon": "work",
             },
             {
                 "title": "Departamentos",
-                "link": "/admin/rh/departamento/",
+                "link": reverse_lazy("custom_admin:rh_departamento_changelist"),
                 "icon": "domain",
             },
             {
                 "title": "Competencias",
-                "link": "/admin/rh/competencia/",
+                "link": reverse_lazy("custom_admin:rh_competencia_changelist"),
                 "icon": "star",
             },
             {
                 "title": "Clasificación de Competencias",
-                "link": "/admin/rh/competenciaclasificacion/",
+                "link": reverse_lazy("custom_admin:rh_competenciaclasificacion_changelist"),
                 "icon": "layers",
             },
             {
                 "title": "Configurar Evaluaciones",
                 "icon": "event_note",
-                "link": "/admin/rh/evaluacion/", 
+                "link": reverse_lazy("custom_admin:rh_evaluacion_changelist"), 
             },                    
         ],
     },
@@ -331,3 +332,4 @@ UNFOLD = {
         "navigation": [],  # 🌟 SE DEJA VACÍO. El Middleware asignará el menú según el módulo activo.
     },
 }
+X_FRAME_OPTIONS = 'SAMEORIGIN'

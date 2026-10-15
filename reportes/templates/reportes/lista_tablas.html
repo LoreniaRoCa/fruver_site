@@ -1,19 +1,135 @@
-HTML
 {% extends 'admin/base_site.html' %}
 {% load i18n static %}
 
-{% block title %}Tablas Dinámicas | {{ site_title|default:_('Django site admin') }}{% endblock %}
+{% block extrahead %}
+{{ block.super }}
+<!-- DevExtreme CSS (Tema Light) -->
+<link rel="stylesheet" href="https://cdn3.devexpress.com/jslib/23.2.5/css/dx.light.css">
+
+<style>
+    #tabpanel-container {
+        height: calc(100vh - 110px);
+        width: 100%;
+        background-color: #f8fafc;
+        border-radius: 8px;
+        overflow: hidden;
+        position: relative;
+    }
+
+    .tab-frame {
+        width: 100%;
+        height: calc(100vh - 160px);
+        border: none;
+        background-color: #ffffff;
+    }
+
+    .dx-tabpanel-tabs {
+        background-color: #ffffff !important;
+        border-bottom: 1px solid #e2e8f0 !important;
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="w-full h-full p-8 bg-gray-50 dark:bg-gray-900 flex flex-col items-center justify-center text-center min-h-[70vh]">
-    <div class="p-4 bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 rounded-full mb-4">
-        <span class="material-symbols-outlined text-5xl">bar_chart</span>
-    </div>
-    <h1 class="text-2xl font-bold text-gray-800 dark:text-white mb-2">
-        Tablas Dinámicas y Reportes
-    </h1>
-    <p class="text-sm text-gray-500 dark:text-gray-400 max-w-md">
-        Selecciona uno de los reportes del menú lateral izquierdo para comenzar a analizar, filtrar y exportar tu información.
-    </p>
+<div class="w-full h-full p-2 bg-gray-50 dark:bg-gray-900">
+    <!-- Contenedor del TabPanel -->
+    <div id="tabpanel-container"></div>
+    <!-- Load Panel Nativo de DevExpress -->
+    <div id="loading-panel"></div>
 </div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+<script src="https://cdn3.devexpress.com/jslib/23.2.5/js/dx.all.js"></script>
+
+<script>
+    var tabPanelInstance;
+    var loadPanelInstance;
+
+    $(function() {
+        // 1. Inicializar Panel de Carga DevExpress
+        loadPanelInstance = $("#loading-panel").dxLoadPanel({
+            shadingColor: "rgba(255, 255, 255, 0.7)",
+            position: { of: "#tabpanel-container" },
+            visible: false,
+            showIndicator: true,
+            showPane: true,
+            shading: true,
+            closeOnOutsideClick: false,
+            message: "Cargando información del reporte..."
+        }).dxLoadPanel("instance");
+
+        // 2. Inicializar TabPanel
+        tabPanelInstance = $("#tabpanel-container").dxTabPanel({
+            dataSource: [],
+            itemTitleTemplate: function(itemData, itemIndex, itemElement) {
+                itemElement.append('<span class="dx-tab-text">' + itemData.title + '</span>');
+                
+                var $closeBtn = $('<i class="dx-icon dx-icon-close ml-2 text-xs text-gray-400 hover:text-red-500 cursor-pointer"></i>');
+                $closeBtn.on("click", function(e) {
+                    e.stopPropagation();
+                    cerrarPestana(itemData.id);
+                });
+                itemElement.append($closeBtn);
+            },
+            itemTemplate: function(itemData) {
+                var $iframe = $('<iframe class="tab-frame" src="' + itemData.url + '"></iframe>');
+                
+                // Ocultar la animación de carga cuando el iframe termine de descargar la información
+                $iframe.on('load', function() {
+                    if (loadPanelInstance) {
+                        loadPanelInstance.hide();
+                    }
+                });
+
+                return $iframe;
+            },
+            selectedIndex: 0,
+            showNavButtons: true,
+            repaintChangesOnly: true,
+            noDataText: "Selecciona un reporte en el menú lateral para abrir su pestaña."
+        }).dxTabPanel("instance");
+
+        var urlParams = new URLSearchParams(window.location.search);
+        var openSlug = urlParams.get('open');
+        if (openSlug) {
+            var nombreReporte = openSlug.replace('-', ' ').toUpperCase();
+            abrirTabReporte(openSlug, nombreReporte, '/reportes/pivot/' + openSlug + '/');
+        }
+    });
+
+    window.abrirTabReporte = function(id, titulo, url) {
+        if (!tabPanelInstance) return;
+
+        // Mostrar relojito/animación de carga inmediatamente
+        if (loadPanelInstance) {
+            loadPanelInstance.option("message", "Cargando " + titulo + "...");
+            loadPanelInstance.show();
+        }
+
+        var items = tabPanelInstance.option("dataSource") || [];
+        var indexExistente = items.findIndex(function(item) { return item.id === id; });
+
+        if (indexExistente !== -1) {
+            tabPanelInstance.option("selectedIndex", indexExistente);
+            // Si ya estaba cargado previamente, ocultamos el loader tras un leve delay
+            setTimeout(function() {
+                loadPanelInstance.hide();
+            }, 300);
+        } else {
+            items.push({
+                id: id,
+                title: titulo,
+                url: url
+            });
+            tabPanelInstance.option("dataSource", items);
+            tabPanelInstance.option("selectedIndex", items.length - 1);
+        }
+    };
+
+    function cerrarPestana(id) {
+        var items = tabPanelInstance.option("dataSource") || [];
+        var newItems = items.filter(function(item) { return item.id !== id; });
+        tabPanelInstance.option("dataSource", newItems);
+    }
+</script>
 {% endblock %}

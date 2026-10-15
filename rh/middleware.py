@@ -1,14 +1,10 @@
 # rh/middleware.py
-
 from django.conf import settings
 from rh.admin import admin_site  # 🌟 Importamos tu instancia de AdminSite
-
 from django.urls import reverse
 from django.db.utils import OperationalError, ProgrammingError
-
-# Importa el modelo que mapea a la tabla rep_pivot_dinamico
+from django.shortcuts import redirect
 from reportes.models import Pivot_Dinamico
-
 
 class RestringirAccesoAdminMiddleware:
     def __init__(self, get_response):
@@ -44,7 +40,8 @@ class RestringirAccesoAdminMiddleware:
                 for rep in reportes_db:
                     items_reportes.append({
                         "title": rep.nombre,
-                        "link": f"/reportes/pivot/{rep.slug}/",
+                        # Lógica: Si ya está en la vista contenedora llama JS, de lo contrario navega abriendo la pestaña por URL
+                        "link": f"javascript:if(window.parent && window.parent.abrirTabReporte){{window.parent.abrirTabReporte('{rep.slug}', '{rep.nombre}', '/reportes/pivot/{rep.slug}/');}}else if(window.abrirTabReporte){{window.abrirTabReporte('{rep.slug}', '{rep.nombre}', '/reportes/pivot/{rep.slug}/');}}else{{window.location.href='/reportes/tablas/?open={rep.slug}';}}",
                         "icon": rep.icono if rep.icono else "bar_chart",
                     })
             except Exception:
@@ -110,3 +107,28 @@ def obtener_nav_tablas_dinamicas():
             "items": items,
         }
     ]        
+class ForzarCambioPasswordMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if request.user.is_authenticated:
+            # 🌟 1. NUEVA CONDICIÓN: Si ingresó por enlace mágico (token), omitir el cambio obligatorio
+            if request.session.get('acceso_por_token'):
+                return self.get_response(request)
+
+            # 2. Rutas exentas (no redirigir si ya está en ellas)
+            path_actual = request.path.lower()
+            
+            # Si la petición es a cambio de contraseña, logout, login o estáticos, continuar
+            if any(k in path_actual for k in ['/cambiar-password-obligatorio', '/cerrar-sesion', '/admin/login', '/static/', '/media/']):
+                return self.get_response(request)
+
+            # 3. Consultar el perfil de Empleado
+            empleado = getattr(request.user, 'empleado', None)
+
+            # Si el empleado existe y tiene activa la bandera 'debe_cambiar_password'
+            if empleado and getattr(empleado, 'debe_cambiar_password', False):
+                return redirect('cambiar_password_obligatorio')
+
+        return self.get_response(request)

@@ -1,439 +1,614 @@
-{% extends "admin/base_site.html" %}
 {% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ titulo_reporte }}</title>
+    
+    <!-- DevExtreme CSS (Tema Light) -->
+    <link rel="stylesheet" href="https://cdn3.devexpress.com/jslib/23.2.5/css/dx.light.css">
+    
+    <!-- Tailwind CSS desde CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
 
-{% block extrahead %}
-{{ block.super }}
-<!-- DevExtreme CSS (Tema Light) -->
-<link rel="stylesheet" href="https://cdn3.devexpress.com/jslib/23.2.5/css/dx.light.css">
-
-<style>
-    /* Full width de Django */
-    #content, .content, .main-content, #content-main, .container, .container-fluid {
-        max-width: 100% !important;
-        width: 100% !important;
-        margin: 0 !important;
-        padding: 0 !important;
-    }
-
-    .dx-pivotgrid {
-        background-color: #ffffff;
-        border-radius: 8px;
-        position: relative !important;
-    }
-
-    .dx-pivotgrid-border-hidden .dx-pivotgrid-area {
-        font-size: 13px;
-    }
-
-    /* Restricción de ancho para el menú contextual */
-    body > .dx-overlay-wrapper:has(.dx-context-menu),
-    .dx-overlay-wrapper.dx-context-menu-wrapper,
-    .dx-overlay-wrapper:has(.dx-pivotgrid-context-menu) {
-        width: auto !important;
-        height: auto !important;
-        max-width: fit-content !important;
-    }
-
-    .dx-context-menu {
-        display: inline-block !important;
-        width: auto !important;
-    }
-
-    /* Menú flotante opaco y delimitado */
-    .dx-context-menu .dx-overlay-content,
-    .dx-menu-items-container {
-        background-color: #ffffff !important;
-        border: 1px solid #cbd5e1 !important;
-        width: 240px !important;
-        min-width: 220px !important;
-        max-width: 280px !important;
-        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.25) !important;
-        border-radius: 8px !important;
-        padding: 4px 0 !important;
-    }
-
-    .dx-context-menu .dx-menu-item-content {
-        color: #1e293b !important;
-        font-size: 13px !important;
-        padding: 8px 12px !important;
-        white-space: nowrap !important;
-    }
-
-    .dx-context-menu .dx-state-hover {
-        background-color: #f1f5f9 !important;
-    }
-
-    /* Ventana del Selector de Campos (Field Chooser) amplia */
-    .dx-pivotgridfieldchooser-popup .dx-overlay-content {
-        background-color: #ffffff !important;
-        width: 650px !important;
-        max-width: 90vw !important;
-        min-width: 550px !important;
-        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.25) !important;
-        border-radius: 10px !important;
-        border: 1px solid #cbd5e1 !important;
-    }
-
-    /* Filtros compactos multi-fila */
-    .dx-pivotgrid-field-panel {
-        white-space: normal !important;
-        overflow: visible !important;
-    }
-
-    .dx-pivotgrid-fields-container {
-        display: flex !important;
-        flex-wrap: wrap !important;
-        white-space: normal !important;
-        gap: 4px !important;
-        padding-right: 90px !important;
-    }
-
-    .dx-pivotgrid-filter-fields {
-        display: flex !important;
-        flex-wrap: wrap !important;
-        gap: 4px !important;
-        align-items: center !important;
-    }
-
-    .dx-pivotgrid-fields-container .dx-pivotgrid-field {
-        margin-bottom: 3px !important;
-        margin-right: 3px !important;
-    }
-
-    .dx-pivotgrid .dx-pivotgrid-toolbar {
-        position: absolute !important;
-        top: 6px !important;
-        right: 10px !important;
-        z-index: 30 !important;
-        background: transparent !important;
-    }
-</style>
-{% endblock %}
-
-{% block content %}
-<div class="w-full h-full p-4 bg-gray-50 dark:bg-gray-900">
-    <!-- Encabezado de Titulo -->
-    <div class="flex flex-wrap justify-between items-center mb-2 px-1 gap-2">
-        <div>
-            <h1 class="text-xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
-                📊 {{ titulo_reporte }}
-            </h1>
-            <p class="text-xs text-gray-500">Power Pivot Grid interactivo alimentado por DevExpress.</p>
-        </div>
-        
-        <div class="flex items-center space-x-2">
-            <div id="toggle-subtotals-btn"></div>
-            <div id="chart-type-selector" class="hidden"></div>
-            <div id="toggle-chart-btn"></div>
-        </div>
-    </div>
-
-    <!-- BARRA DE HERRAMIENTAS ESTILO WINFORMS (PLANTILLA + FECHAS + GUARDAR) -->
-    <div class="bg-white dark:bg-gray-800 p-2.5 rounded-lg border border-gray-200 dark:border-gray-700 mb-3 shadow-sm flex flex-wrap items-center justify-between gap-3">
-        <div class="flex flex-wrap items-center gap-3">
-            <!-- Combo de Plantillas -->
-            <div class="flex items-center gap-2">
-                <span class="text-xs font-bold text-gray-700 dark:text-gray-300">Plantilla:</span>
-                <div id="combo-plantillas" class="w-64"></div>
-            </div>
-
-            <!-- Rango de Fechas -->
-            <div class="flex items-center gap-2 border-l pl-3 border-gray-300 dark:border-gray-600">
-                <span class="text-xs font-bold text-gray-700 dark:text-gray-300">Del:</span>
-                <div id="fecha-inicio" class="w-32"></div>
-                <span class="text-xs font-bold text-gray-700 dark:text-gray-300">Al:</span>
-                <div id="fecha-fin" class="w-32"></div>
-            </div>
-
-            <!-- Botón Actualizar Consulta -->
-            <div id="btn-actualizar-datos"></div>
-        </div>
-
-        <!-- Acciones de Guardado de Vistas -->
-        <div class="flex items-center gap-2">
-            <div id="btn-guardar-plantilla"></div>
-            <div id="btn-nueva-plantilla"></div>
-        </div>
-    </div>
-
-    <!-- Contenedor de Gráfica -->
-    <div id="chart-container" class="hidden mb-3 p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
-        <div id="pivotgrid-chart" class="h-64 w-full"></div>
-    </div>
-
-    <!-- Tabla Dinámica DevExpress -->
-    <div id="pivotgrid" class="w-full shadow-sm rounded-lg overflow-hidden"></div>
-</div>
-
-<!-- Inyección segura de JSON y Variables desde Django -->
-{{ datos_json|json_script:"datos-json-data" }}
-{{ configuracion_pivot|json_script:"config-pivot-data" }}
-{{ plantillas_usuario|json_script:"plantillas-usuario-data" }}
-{{ reporte_id|default:0|json_script:"reporte-id-data" }}
-
-<script id="urls-data" type="application/json">
-    {
-        "guardarPlantillaUrl": "{% url 'reportes:guardar_plantilla_pivot' %}"
-    }
-</script>
-
-<input type="hidden" id="csrf-token-input" value="{{ csrf_token }}">
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
-<script src="https://cdn3.devexpress.com/jslib/23.2.5/js/dx.all.js"></script>
-<script src="https://cdn3.devexpress.com/jslib/23.2.5/js/localization/dx.messages.es.js"></script>
-
-<script>
-    const URL_GUARDAR_PLANTILLA = "{% url 'reportes:guardar_plantilla_pivot' %}";
-
-    function calcularFechaMacro(token) {
-        if (!token) return new Date();
-        token = String(token).trim();
-
-        let hoy = new Date();
-        let year = hoy.getFullYear();
-        let month = hoy.getMonth();
-
-        if (token === "A1") return new Date(year, 0, 1);
-        if (token === "a") return new Date(year, 11, 31);
-        if (token === "-1a") return new Date(year - 1, 0, 1);
-        if (token === "M") return new Date(year, month, 1);
-        if (token === "m") return new Date(year, month + 1, 0);
-        if (token === "Hoy" || token === "D") return hoy;
-
-        let matchMeses = token.match(/^([+-]?\d+)m$/i);
-        if (matchMeses) {
-            let diffMeses = parseInt(matchMeses[1]);
-            return new Date(year, month + diffMeses, 1);
+    <style>
+        html, body {
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            background-color: #f8fafc;
+            overflow-x: hidden;
+            font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         }
 
-        let matchDias = token.match(/^([+-]?\d+)d$/i);
-        if (matchDias) {
-            let diffDias = parseInt(matchDias[1]);
-            let res = new Date();
-            res.setDate(hoy.getDate() + diffDias);
-            return res;
+        .dx-pivotgrid {
+            background-color: #ffffff;
+            border-radius: 8px;
+            position: relative !important;
         }
 
-        let fechaDirecta = new Date(token);
-        return isNaN(fechaDirecta.getTime()) ? hoy : fechaDirecta;
-    }
+        .dx-pivotgrid-border-hidden .dx-pivotgrid-area {
+            font-size: 13px;
+        }
 
-    $(function() {
-        DevExpress.localization.locale("es-MX");
+        /* Ocultar la barra interna de DevExtreme para usar nuestra barra estilo Windows */
+        .dx-pivotgrid .dx-pivotgrid-toolbar {
+            display: none !important;
+        }
 
-        const reporteId = JSON.parse(document.getElementById('reporte-id-data').textContent);
-        const csrfToken = document.getElementById('csrf-token-input').value;
-        const rawData = JSON.parse(document.getElementById('datos-json-data').textContent);
-        const rawConfig = JSON.parse(document.getElementById('config-pivot-data').textContent);
-        const plantillasUsuario = JSON.parse(document.getElementById('plantillas-usuario-data').textContent || '[]');
-        
-        const urlsData = JSON.parse(document.getElementById('urls-data').textContent);
-        const urlGuardarPlantilla = urlsData.guardarPlantillaUrl;
+        body > .dx-overlay-wrapper:has(.dx-context-menu),
+        .dx-overlay-wrapper.dx-context-menu-wrapper,
+        .dx-overlay-wrapper:has(.dx-pivotgrid-context-menu) {
+            width: auto !important;
+            height: auto !important;
+            max-width: fit-content !important;
+        }
 
-        let customFields = Array.isArray(rawConfig) ? rawConfig : (rawConfig ? rawConfig.Fields : null);
+        .dx-context-menu {
+            display: inline-block !important;
+            width: auto !important;
+        }
 
-        let areaMap = {
-            "FilterArea": "filter",
-            "RowArea": "row",
-            "ColumnArea": "column",
-            "DataArea": "data"
-        };
+        .dx-context-menu .dx-overlay-content,
+        .dx-menu-items-container {
+            background-color: #ffffff !important;
+            border: 1px solid #cbd5e1 !important;
+            width: 240px !important;
+            min-width: 220px !important;
+            max-width: 280px !important;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.25) !important;
+            border-radius: 8px !important;
+            padding: 4px 0 !important;
+        }
 
-        let pivotFields = (customFields || []).map(function(f) {
-            let fieldObj = Object.assign({}, f);
+        .dx-context-menu .dx-menu-item-content {
+            color: #1e293b !important;
+            font-size: 13px !important;
+            padding: 8px 12px !important;
+            white-space: nowrap !important;
+        }
 
-            fieldObj.dataField = f.dataField || f.FieldName;
-            fieldObj.caption = f.caption || f.Caption;
+        .dx-context-menu .dx-state-hover {
+            background-color: #f1f5f9 !important;
+        }
 
-            let rawArea = f.area || f.Area;
-            let mappedArea = areaMap[rawArea] || rawArea;
+        .dx-pivotgridfieldchooser-popup .dx-overlay-content {
+            background-color: #ffffff !important;
+            width: 650px !important;
+            max-width: 90vw !important;
+            min-width: 550px !important;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.25) !important;
+            border-radius: 10px !important;
+            border: 1px solid #cbd5e1 !important;
+        }
 
-            let isOriginallyHidden = (f.visible === false || f.Visible === false);
+        .dx-pivotgrid-field-panel {
+            white-space: normal !important;
+            overflow: visible !important;
+        }
 
-            if (isOriginallyHidden) {
-                fieldObj.area = undefined;
-                fieldObj.visible = true;
+        .dx-pivotgrid-fields-container {
+            display: flex !important;
+            flex-wrap: wrap !important;
+            white-space: normal !important;
+            gap: 4px !important;
+            padding-right: 90px !important;
+        }
 
-                const sampleVal = rawData.length > 0 ? rawData[0][fieldObj.dataField] : null;
-                const isNumeric = (typeof sampleVal === 'number');
+        .dx-pivotgrid-filter-fields {
+            display: flex !important;
+            flex-wrap: wrap !important;
+            gap: 4px !important;
+            align-items: center !important;
+        }
 
-                if (isNumeric) {
-                    fieldObj.isMeasure = true;
-                    fieldObj.summaryType = f.summaryType || "sum";
-                    fieldObj.format = f.format || "#,##0.00";
-                } else {
-                    fieldObj.isMeasure = false;
-                }
-            } else {
-                fieldObj.area = mappedArea || "filter";
-                fieldObj.visible = true;
-                if (fieldObj.area === "data") {
-                    fieldObj.summaryType = f.summaryType || "sum";
-                }
+        .dx-pivotgrid-fields-container .dx-pivotgrid-field {
+            margin-bottom: 3px !important;
+            margin-right: 3px !important;
+        }
+
+        /* 1. Negrita para el Gran Total (Etiquetas y Valores) */
+        .dx-pivotgrid-area-rows td.dx-grandtotal,
+        .dx-pivotgrid-area-data tbody > tr.dx-grandtotal > td,
+        .dx-pivotgrid-area-data tbody > tr:last-child > td.dx-grandtotal {
+            font-weight: bold !important;
+            color: #0f172a !important;
+        }
+
+        /* 2. Negrita para Subtotales por Grupo (ej. 'ACELGA Total', 'AGUACATE Total', etc.) */
+        .dx-pivotgrid-area-rows td.dx-total,
+        .dx-pivotgrid-area-data tbody > tr.dx-total > td,
+        .dx-pivotgrid-area-data td.dx-total {
+            font-weight: bold !important;
+            color: #1e293b !important;
+        }
+
+        /* Estilo para los botones compactos tipo Ribbon/Windows */
+        .btn-toolbar-win {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2px 8px;
+            font-size: 11px;
+            font-weight: 600;
+            color: #334155;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            background-color: #ffffff;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            min-width: 58px;
+            height: 42px;
+        }
+
+        .btn-toolbar-win:hover {
+            background-color: #f1f5f9;
+            border-color: #94a3b8;
+            color: #0f172a;
+        }
+
+        .btn-toolbar-win i {
+            font-size: 16px;
+            margin-bottom: 2px;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 p-3">
+
+    <div class="w-full h-full">
+        <!-- BARRA DE HERRAMIENTAS ÚNICA AL ESTILO WINDOWS -->
+        <div class="bg-white p-2 rounded-lg border border-gray-200 mb-2 shadow-sm flex flex-wrap items-center justify-between gap-2">
+            
+            <div class="flex flex-wrap items-center gap-3">
+                <!-- Combo de Plantillas -->
+                <div class="flex items-center gap-1.5">
+                    <span class="text-xs font-bold text-gray-700">Plantilla:</span>
+                    <div id="combo-plantillas" class="w-56"></div>
+                </div>
+
+                <!-- Rango de Fechas -->
+                <div class="flex items-center gap-1.5 border-l pl-2.5 border-gray-300">
+                    <span class="text-xs font-bold text-gray-700">Del:</span>
+                    <div id="fecha-inicio" class="w-28"></div>
+                    <span class="text-xs font-bold text-gray-700">Al:</span>
+                    <div id="fecha-fin" class="w-28"></div>
+                </div>
+
+                <!-- GRUPO DE BOTONES COMPACTOS TIPO WINDOWS -->
+                <div class="flex items-center gap-1 border-l pl-2.5 border-gray-300">
+                    <!-- Actualizar -->
+                    <button type="button" id="btn-actualizar-win" class="btn-toolbar-win" title="Actualizar datos">
+                        <i class="dx-icon-refresh text-blue-600"></i>
+                        <span>Actualizar</span>
+                    </button>
+
+                    <!-- Agregar / Guardar Como -->
+                    <button type="button" id="btn-nueva-win" class="btn-toolbar-win" title="Guardar como nueva plantilla">
+                        <i class="dx-icon-add text-emerald-600"></i>
+                        <span>Agregar</span>
+                    </button>
+
+                    <!-- Guardar -->
+                    <button type="button" id="btn-guardar-win" class="btn-toolbar-win" title="Guardar cambios en plantilla actual">
+                        <i class="dx-icon-save text-blue-700"></i>
+                        <span>Guardar</span>
+                    </button>
+
+                    <!-- Exportar -->
+                    <button type="button" id="btn-exportar-win" class="btn-toolbar-win" title="Exportar a Excel">
+                        <i class="dx-icon-xlsxfile text-green-700"></i>
+                        <span>Exportar</span>
+                    </button>
+
+                    <!-- SubTotal -->
+                    <button type="button" id="btn-subtotales-win" class="btn-toolbar-win" title="Mostrar u ocultar subtotales">
+                        <i class="dx-icon-variable text-amber-600"></i>
+                        <span>SubTotal</span>
+                    </button>
+
+                    <!-- Ver Gráfica -->
+                    <button type="button" id="btn-chart-win" class="btn-toolbar-win" title="Mostrar u ocultar gráfica">
+                        <i class="dx-icon-chart text-purple-600"></i>
+                        <span>Gráfica</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="text-right hidden xl:block">
+                <span class="text-xs font-bold text-gray-700 block">📊 {{ titulo_reporte }}</span>
+            </div>
+        </div>
+
+        <!-- Contenedor de Gráfica -->
+        <div id="chart-container" class="hidden mb-3 p-3 bg-white rounded-lg border border-gray-200 shadow-sm">
+            <div id="pivotgrid-chart" class="h-64 w-full"></div>
+        </div>
+
+        <!-- Tabla Dinámica DevExpress -->
+        <div id="pivotgrid" class="w-full shadow-sm rounded-lg overflow-hidden"></div>
+    </div>
+
+    <!-- Inyección de JSON y Variables desde Django -->
+    {{ datos_json|json_script:"datos-json-data" }}
+    {{ configuracion_pivot|json_script:"config-pivot-data" }}
+    {{ plantillas_usuario|json_script:"plantillas-usuario-data" }}
+    {{ reporte_id|default:0|json_script:"reporte-id-data" }}
+    
+    {{ fecha_inicio_actual|default:""|json_script:"fecha-inicio-actual-data" }}
+    {{ fecha_fin_actual|default:""|json_script:"fecha-fin-actual-data" }}
+
+    <script id="urls-data" type="application/json">
+        {
+            "guardarPlantillaUrl": "{% url 'reportes:guardar_plantilla_pivot' %}"
+        }
+    </script>
+
+    <input type="hidden" id="csrf-token-input" value="{{ csrf_token }}">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <script src="https://cdn3.devexpress.com/jslib/23.2.5/js/dx.all.js"></script>
+    <script src="https://cdn3.devexpress.com/jslib/23.2.5/js/localization/dx.messages.es.js"></script>
+
+    <script>
+        const URL_GUARDAR_PLANTILLA = "{% url 'reportes:guardar_plantilla_pivot' %}";
+
+        function calcularFechaMacro(token) {
+            if (!token) return new Date();
+            token = String(token).trim();
+
+            let hoy = new Date();
+            let year = hoy.getFullYear();
+            let month = hoy.getMonth();
+
+            if (token === "A1") return new Date(year, 0, 1);
+            if (token === "a") return new Date(year, 11, 31);
+            if (token === "-1a") return new Date(year - 1, 0, 1);
+            if (token === "M") return new Date(year, month, 1);
+            if (token === "m") return new Date(year, month + 1, 0);
+            if (token === "Hoy" || token === "D") return hoy;
+
+            let matchMeses = token.match(/^([+-]?\d+)m$/i);
+            if (matchMeses) {
+                let diffMeses = parseInt(matchMeses[1]);
+                return new Date(year, month + diffMeses, 1);
             }
 
-            return fieldObj;
-        });
+            let matchDias = token.match(/^([+-]?\d+)d$/i);
+            if (matchDias) {
+                let diffDias = parseInt(matchDias[1]);
+                let res = new Date();
+                res.setDate(hoy.getDate() + diffDias);
+                return res;
+            }
 
-        var pivotGridDataSource = new DevExpress.data.PivotGridDataSource({
-            fields: pivotFields,
-            store: rawData
-        });
+            let fechaDirecta = new Date(token);
+            return isNaN(fechaDirecta.getTime()) ? hoy : fechaDirecta;
+        }
 
-        var pivotGrid = $("#pivotgrid").dxPivotGrid({
-            allowSortingBySummary: true,
-            allowSorting: true,
-            allowFiltering: true,
-            allowExpandAll: true,
+        $(function() {
+            DevExpress.localization.locale("es-MX");
 
-            dataFieldArea: "column",
-            height: "calc(100vh - 180px)",
-            width: "100%",
+            const reporteId = JSON.parse(document.getElementById('reporte-id-data').textContent);
+            const csrfToken = document.getElementById('csrf-token-input').value;
+            let rawData = JSON.parse(document.getElementById('datos-json-data').textContent);
+            const rawConfig = JSON.parse(document.getElementById('config-pivot-data').textContent);
+            const plantillasUsuario = JSON.parse(document.getElementById('plantillas-usuario-data').textContent || '[]');
 
-            scrolling: { mode: "virtual" },
+            const fechaInicioActualStr = JSON.parse(document.getElementById('fecha-inicio-actual-data')?.textContent || '""');
+            const fechaFinActualStr = JSON.parse(document.getElementById('fecha-fin-actual-data')?.textContent || '""');
 
-            showBorders: true,
-            showRowTotals: true,
-            showColumnTotals: true,
-            showRowGrandTotals: true,
-            showColumnGrandTotals: true,
+            let customFields = Array.isArray(rawConfig) ? rawConfig : (rawConfig ? rawConfig.Fields : null);
 
-            fieldChooser: {
-                enabled: true,
-                allowSearch: true,
-                width: 650,
-                height: 550,
-                layout: 0,
-                applyValueMode: "onApply"
-            },
+            let areaMap = {
+                "FilterArea": "filter",
+                "RowArea": "row",
+                "ColumnArea": "column",
+                "DataArea": "data"
+            };
 
-            export: {
-                enabled: true,
-                fileName: "reporte_pivot"
-            },
+            let pivotFields = (customFields || []).map(function(f) {
+                let fieldObj = Object.assign({}, f);
 
-            fieldPanel: {
-                visible: true,
-                showFilterFields: true,
-                showColumnFields: true,
-                showRowFields: true,
-                showDataFields: false,
-                allowFieldDragging: true
-            },
+                fieldObj.dataField = f.dataField || f.FieldName;
+                fieldObj.caption = f.caption || f.Caption;
 
-            stateStoring: { enabled: false },
+                let rawArea = f.area || f.Area;
+                let mappedArea = areaMap[rawArea] || rawArea;
 
-            dataSource: pivotGridDataSource
-        }).dxPivotGrid("instance");
+                let isOriginallyHidden = (f.visible === false || f.Visible === false);
 
-        var dateBoxInicio = $("#fecha-inicio").dxDateBox({
-            type: "date",
-            displayFormat: "dd/MM/yyyy",
-            value: plantillasUsuario.length > 0 ? calcularFechaMacro(plantillasUsuario[0].fecha_inicio_macro) : calcularFechaMacro("-3m")
-        }).dxDateBox("instance");
-
-        var dateBoxFin = $("#fecha-fin").dxDateBox({
-            type: "date",
-            displayFormat: "dd/MM/yyyy",
-            value: plantillasUsuario.length > 0 ? calcularFechaMacro(plantillasUsuario[0].fecha_fin_macro) : calcularFechaMacro("m")
-        }).dxDateBox("instance");
-
-        var comboPlantillas = $("#combo-plantillas").dxSelectBox({
-            items: plantillasUsuario,
-            displayExpr: "nombre_plantilla",
-            valueExpr: "id",
-            value: plantillasUsuario.length > 0 ? plantillasUsuario[0].id : null,
-            onValueChanged: function(e) {
-                var selectedItem = e.component.option("selectedItem");
-                if (selectedItem) {
-                    dateBoxInicio.option("value", calcularFechaMacro(selectedItem.fecha_inicio_macro || "-3m"));
-                    dateBoxFin.option("value", calcularFechaMacro(selectedItem.fecha_fin_macro || "m"));
-
-                    if (selectedItem.configuracion_pivot) {
-                        var stateObj = typeof selectedItem.configuracion_pivot === "string" 
-                            ? JSON.parse(selectedItem.configuracion_pivot) 
-                            : selectedItem.configuracion_pivot;
-                        
-                        pivotGrid.getDataSource().state(stateObj);
+                if (isOriginallyHidden) {
+                    fieldObj.area = undefined;
+                    fieldObj.visible = true;
+                } else {
+                    fieldObj.area = mappedArea || "filter";
+                    fieldObj.visible = true;
+                    if (fieldObj.area === "data") {
+                        fieldObj.summaryType = f.summaryType || "sum";
                     }
                 }
-            }
-        }).dxSelectBox("instance");
 
-        $("#btn-actualizar-datos").dxButton({
-            text: "Actualizar",
-            icon: "refresh",
-            type: "default",
-            onClick: function() {
+                // Asignación directa del formato definido en el JSON de la BD
+                if (f.format) {
+                    fieldObj.format = f.format;
+                }
+
+                return fieldObj;
+            });
+
+            var pivotGridDataSource = new DevExpress.data.PivotGridDataSource({
+                fields: pivotFields,
+                store: rawData
+            });
+
+            var pivotGrid = $("#pivotgrid").dxPivotGrid({
+                allowSortingBySummary: true,
+                allowSorting: true,
+                allowFiltering: true,
+                allowExpandAll: true,
+
+                dataFieldArea: "column",
+                height: "calc(100vh - 120px)",
+                width: "100%",
+
+                loadPanel: {
+                    enabled: true,
+                    text: "Procesando datos...",
+                    showPane: true,
+                    height: 100,
+                    width: 280
+                },    
+
+                scrolling: { mode: "virtual" },
+
+                showBorders: true,
+                showRowTotals: true,
+                showColumnTotals: true,
+                showRowGrandTotals: true,
+                showColumnGrandTotals: true,
+
+                fieldChooser: {
+                    enabled: true,
+                    allowSearch: true,
+                    width: 650,
+                    height: 550,
+                    layout: 0,
+                    applyValueMode: "onApply"
+                },
+
+                export: {
+                    enabled: true,
+                    fileName: "Reporte_PivotGrid"
+                },
+
+                // Manejador centralizado de exportación a Excel
+                onExporting: function(e) {
+                    var workbook = new ExcelJS.Workbook();
+                    var worksheet = workbook.addWorksheet("Reporte Pivot");
+
+                    DevExpress.excelExporter.exportPivotGrid({
+                        component: e.component,
+                        worksheet: worksheet
+                    }).then(function() {
+                        workbook.xlsx.writeBuffer().then(function(buffer) {
+                            saveAs(new Blob([buffer], { type: "application/octet-stream" }), "Reporte_Pivot.xlsx");
+                        });
+                    });
+                    e.cancel = true;
+                },
+
+                fieldPanel: {
+                    visible: true,
+                    showFilterFields: true,
+                    showColumnFields: true,
+                    showRowFields: true,
+                    showDataFields: false,
+                    allowFieldDragging: true
+                },
+
+                stateStoring: { enabled: false },
+
+                dataSource: pivotGridDataSource
+            }).dxPivotGrid("instance");
+
+            // INICIALIZACIÓN DE CONTROLES DE FECHAS
+            var valFechaInicio = fechaInicioActualStr 
+                ? new Date(fechaInicioActualStr + 'T00:00:00') 
+                : (plantillasUsuario.length > 0 ? calcularFechaMacro(plantillasUsuario[0].fecha_inicio_macro) : calcularFechaMacro("-3m"));
+
+            var valFechaFin = fechaFinActualStr 
+                ? new Date(fechaFinActualStr + 'T00:00:00') 
+                : (plantillasUsuario.length > 0 ? calcularFechaMacro(plantillasUsuario[0].fecha_fin_macro) : calcularFechaMacro("m"));
+
+            var dateBoxInicio = $("#fecha-inicio").dxDateBox({
+                type: "date",
+                displayFormat: "dd/MM/yyyy",
+                value: valFechaInicio
+            }).dxDateBox("instance");
+
+            var dateBoxFin = $("#fecha-fin").dxDateBox({
+                type: "date",
+                displayFormat: "dd/MM/yyyy",
+                value: valFechaFin
+            }).dxDateBox("instance");
+
+            var comboPlantillas = $("#combo-plantillas").dxSelectBox({
+                items: plantillasUsuario,
+                displayExpr: "nombre_plantilla",
+                valueExpr: "id",
+                value: plantillasUsuario.length > 0 ? plantillasUsuario[0].id : null,
+                onValueChanged: function(e) {
+                    var selectedItem = e.component.option("selectedItem");
+                    if (selectedItem) {
+                        if (e.event) {
+                            dateBoxInicio.option("value", calcularFechaMacro(selectedItem.fecha_inicio_macro || "-3m"));
+                            dateBoxFin.option("value", calcularFechaMacro(selectedItem.fecha_fin_macro || "m"));
+                        }
+
+                        if (selectedItem.configuracion_pivot) {
+                            var stateObj = typeof selectedItem.configuracion_pivot === "string" 
+                                ? JSON.parse(selectedItem.configuracion_pivot) 
+                                : selectedItem.configuracion_pivot;
+                            
+                            pivotGrid.getDataSource().state(stateObj);
+                        }
+                    }
+                }
+            }).dxSelectBox("instance");
+
+            // 1. EVENTO ACTUALIZAR (AJAX)
+            $("#btn-actualizar-win").on("click", function() {
                 var fInicio = dateBoxInicio.option("value");
                 var fFin = dateBoxFin.option("value");
-                
+
+                if (!fInicio || !fFin) {
+                    DevExpress.ui.notify("Por favor seleccione ambas fechas.", "warning", 2000);
+                    return;
+                }
+
                 var formatInicio = DevExpress.localization.formatDate(fInicio, "yyyy-MM-dd");
                 var formatFin = DevExpress.localization.formatDate(fFin, "yyyy-MM-dd");
 
-                var url = new URL(window.location.href);
-                url.searchParams.set("fecha_inicio", formatInicio);
-                url.searchParams.set("fecha_fin", formatFin);
-                window.location.href = url.toString();
-            }
-        });
+                DevExpress.ui.notify("Consultando datos del servidor...", "info", 1500);
 
-        // 🌟 FUNCIÓN AUXILIAR REUTILIZABLE PARA ENVIAR A LA API EN SUPABASE/DJANGO 🌟
-        function enviarPlantillaServidor(nombre) {
-            var currentState = pivotGrid.getDataSource().state();
-            var fInicio = dateBoxInicio.option("value");
-            var fFin = dateBoxFin.option("value");
-            
-            var macroInicioStr = DevExpress.localization.formatDate(fInicio, "yyyy-MM-dd");
-            var macroFinStr = DevExpress.localization.formatDate(fFin, "yyyy-MM-dd");
+                var ajaxUrl = window.location.pathname + "?fecha_inicio=" + formatInicio + "&fecha_fin=" + formatFin + "&format=json";
 
-            DevExpress.ui.notify("Guardando plantilla...", "info", 1500);
-
-            // Se hace la petición a la constante declarada
-            fetch(URL_GUARDAR_PLANTILLA, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "X-CSRFToken": csrfToken
-                },
-                body: JSON.stringify({
-                    reporte_id: reporteId,
-                    nombre_plantilla: nombre,
-                    configuracion_pivot: currentState,
-                    fecha_inicio_macro: macroInicioStr,
-                    fecha_fin_macro: macroFinStr
+                fetch(ajaxUrl, {
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
                 })
-            })
-            .then(function(res) {
-                if (!res.ok) {
-                    throw new Error("Respuesta del servidor (" + res.status + "): " + res.statusText);
-                }
-                return res.json();
-            })
-            .then(function(data) {
-                if (data.status === "success") {
-                    DevExpress.ui.notify("Plantilla '" + nombre + "' guardada con éxito", "success", 3000);
-                    setTimeout(function() {
-                        window.location.reload();
-                    }, 800);
-                } else {
-                    DevExpress.ui.notify("Error: " + (data.message || "No se pudo guardar"), "error", 4000);
-                }
-            })
-            .catch(function(err) {
-                console.error("Error al guardar plantilla:", err);
-                DevExpress.ui.notify("Error: " + err.message, "error", 4000);
-            });
-        }
+                .then(function(res) {
+                    if (!res.ok) throw new Error("Error en servidor: " + res.statusText);
+                    return res.json();
+                })
+                .then(function(response) {
+                    if (response.status === "success") {
+                        var currentState = pivotGrid.getDataSource().state();
+                        var nuevoDataSource = new DevExpress.data.PivotGridDataSource({
+                            fields: pivotFields,
+                            store: response.datos || []
+                        });
 
-        $("#btn-guardar-plantilla").dxButton({
-            text: "Guardar",
-            icon: "save",
-            type: "success",
-            onClick: function() {
+                        pivotGrid.option("dataSource", nuevoDataSource);
+
+                        if (currentState) {
+                            pivotGrid.getDataSource().state(currentState);
+                        }
+
+                        DevExpress.ui.notify("Datos actualizados (" + (response.datos ? response.datos.length : 0) + " registros)", "success", 3000);
+                    } else {
+                        DevExpress.ui.notify("No se pudieron obtener los datos", "error", 3000);
+                    }
+                })
+                .catch(function(err) {
+                    console.error("Error al actualizar:", err);
+                    DevExpress.ui.notify("Error: " + err.message, "error", 4000);
+                });
+            });
+
+            // 2. EVENTO EXPORTAR A EXCEL
+            $("#btn-exportar-win").on("click", function() {
+                var workbook = new ExcelJS.Workbook();
+                var worksheet = workbook.addWorksheet("Reporte Pivot");
+
+                DevExpress.excelExporter.exportPivotGrid({
+                    component: pivotGrid,
+                    worksheet: worksheet
+                }).then(function() {
+                    workbook.xlsx.writeBuffer().then(function(buffer) {
+                        saveAs(new Blob([buffer], { type: "application/octet-stream" }), "Reporte_Pivot.xlsx");
+                    });
+                });
+            });
+
+            // 3. EVENTO MOSTRAR/OCULTAR SUBTOTALES
+            $("#btn-subtotales-win").on("click", function() {
+                var showSubtotals = !pivotGrid.option("showRowTotals");
+                pivotGrid.option("showRowTotals", showSubtotals);
+                pivotGrid.option("showColumnTotals", showSubtotals);
+                
+                // Resalta el botón cuando los subtotales están activos
+                $(this).toggleClass("bg-amber-100 border-amber-400", showSubtotals);
+            });
+
+            // 4. EVENTO MOSTRAR/OCULTAR GRÁFICA
+            var chart = $("#pivotgrid-chart").dxChart({
+                commonSeriesSettings: { type: "bar" },
+                tooltip: {
+                    enabled: true,
+                    customizeTooltip: function(args) {
+                        return { html: args.seriesName + "<br/><b>" + args.valueText + "</b>" };
+                    }
+                },
+                size: { height: 260 },
+                adaptiveLayout: { width: 450 }
+            }).dxChart("instance");
+
+            pivotGrid.bindChart(chart, {
+                dataFieldsDisplayMode: "singleAxis",
+                behavior: "filterable"
+            });
+
+            $("#btn-chart-win").on("click", function() {
+                var $chartContainer = $("#chart-container");
+                if ($chartContainer.hasClass("hidden")) {
+                    $chartContainer.removeClass("hidden");
+                    $(this).addClass("bg-purple-100 border-purple-400");
+                    chart.render();
+                } else {
+                    $chartContainer.addClass("hidden");
+                    $(this).removeClass("bg-purple-100 border-purple-400");
+                }
+            });
+
+            // 5. EVENTOS GUARDAR Y NUEVA PLANTILLA (AGREGAR)
+            function enviarPlantillaServidor(nombre) {
+                var currentState = pivotGrid.getDataSource().state();
+                var fInicio = dateBoxInicio.option("value");
+                var fFin = dateBoxFin.option("value");
+                
+                var macroInicioStr = DevExpress.localization.formatDate(fInicio, "yyyy-MM-dd");
+                var macroFinStr = DevExpress.localization.formatDate(fFin, "yyyy-MM-dd");
+
+                DevExpress.ui.notify("Guardando plantilla...", "info", 1500);
+
+                fetch(URL_GUARDAR_PLANTILLA, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRFToken": csrfToken
+                    },
+                    body: JSON.stringify({
+                        reporte_id: reporteId,
+                        nombre_plantilla: nombre,
+                        configuracion_pivot: currentState,
+                        fecha_inicio_macro: macroInicioStr,
+                        fecha_fin_macro: macroFinStr
+                    })
+                })
+                .then(function(res) {
+                    if (!res.ok) throw new Error("Respuesta del servidor: " + res.statusText);
+                    return res.json();
+                })
+                .then(function(data) {
+                    if (data.status === "success") {
+                        DevExpress.ui.notify("Plantilla '" + nombre + "' guardada con éxito", "success", 3000);
+                        setTimeout(function() { window.location.reload(); }, 800);
+                    } else {
+                        DevExpress.ui.notify("Error: " + (data.message || "No se pudo guardar"), "error", 4000);
+                    }
+                })
+                .catch(function(err) {
+                    console.error("Error al guardar plantilla:", err);
+                    DevExpress.ui.notify("Error: " + err.message, "error", 4000);
+                });
+            }
+
+            $("#btn-guardar-win").on("click", function() {
                 var plantillaActual = comboPlantillas.option("selectedItem");
                 var nombre = plantillaActual ? plantillaActual.nombre_plantilla : "Mi Plantilla";
 
@@ -443,71 +618,15 @@
                 }
 
                 enviarPlantillaServidor(nombre.trim());
-            }
-        });
+            });
 
-        $("#btn-nueva-plantilla").dxButton({
-            text: "Guardar Como...",
-            icon: "add",
-            type: "normal",
-            onClick: function() {
+            $("#btn-nueva-win").on("click", function() {
                 var nombre = prompt("Nombre para la nueva plantilla:", "Nueva Vista");
                 if (!nombre || nombre.trim() === "") return;
 
                 enviarPlantillaServidor(nombre.trim());
-            }
+            });
         });
-
-        var chart = $("#pivotgrid-chart").dxChart({
-            commonSeriesSettings: { type: "bar" },
-            tooltip: {
-                enabled: true,
-                customizeTooltip: function(args) {
-                    return { html: args.seriesName + "<br/><b>" + args.valueText + "</b>" };
-                }
-            },
-            size: { height: 260 },
-            adaptiveLayout: { width: 450 }
-        }).dxChart("instance");
-
-        pivotGrid.bindChart(chart, {
-            dataFieldsDisplayMode: "singleAxis",
-            behavior: "filterable"
-        });
-
-        var subtotalsBtn = $("#toggle-subtotals-btn").dxButton({
-            text: "Ocultar Subtotales",
-            icon: "eyeopen",
-            type: "normal",
-            stylingMode: "outlined",
-            onClick: function() {
-                var showSubtotals = !pivotGrid.option("showRowTotals");
-                pivotGrid.option("showRowTotals", showSubtotals);
-                pivotGrid.option("showColumnTotals", showSubtotals);
-                subtotalsBtn.option({
-                    text: showSubtotals ? "Ocultar Subtotales" : "Mostrar Subtotales",
-                    icon: showSubtotals ? "eyeopen" : "eyeclose"
-                });
-            }
-        }).dxButton("instance");
-
-        var chartBtn = $("#toggle-chart-btn").dxButton({
-            text: "Ver Gráfica",
-            icon: "chart",
-            type: "normal",
-            stylingMode: "outlined",
-            onClick: function() {
-                var $chartContainer = $("#chart-container");
-                if ($chartContainer.hasClass("hidden")) {
-                    $chartContainer.removeClass("hidden");
-                    chartBtn.option({ text: "Ocultar Gráfica", icon: "close" });
-                    chart.render();
-                } else {
-                    $chartContainer.addClass("hidden");
-                    chartBtn.option({ text: "Ver Gráfica", icon: "chart" });
-                }
-            }
-        }).dxButton("instance");
-    });
-</script>
-{% endblock %}
+    </script>
+</body>
+</html>

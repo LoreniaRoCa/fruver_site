@@ -58,6 +58,10 @@ def resolver_macro_fecha(token):
         return hoy
 
 
+# views.py de Reportes
+
+# reportes/views.py
+
 @login_required
 def reporte_dinamico_view(request, slug):
     reporte = get_object_or_404(Pivot_Dinamico, slug=slug, activo=True)
@@ -67,7 +71,7 @@ def reporte_dinamico_view(request, slug):
     fecha_inicio_raw = request.GET.get('fecha_inicio')
     fecha_fin_raw = request.GET.get('fecha_fin')
 
-    # Si no se enviaron por URL, resolver con los macros por defecto del reporte base
+    # Resolver las fechas (ya sean macros '-3m' o fechas ISO 'YYYY-MM-DD')
     if fecha_inicio_raw:
         fecha_inicio_val = resolver_macro_fecha(fecha_inicio_raw)
     else:
@@ -84,13 +88,10 @@ def reporte_dinamico_view(request, slug):
         params = []
 
         if num_params == 3:
-            # Pasa Empresa, Fecha Inicio y Fecha Fin
             params = [empresa_activa, fecha_inicio_val, fecha_fin_val]
         elif num_params == 2:
-            # Pasa Fecha Inicio y Fecha Fin
             params = [fecha_inicio_val, fecha_fin_val]
         elif num_params == 1:
-            # Pasa solo Empresa
             params = [empresa_activa]
 
         if params:
@@ -111,7 +112,16 @@ def reporte_dinamico_view(request, slug):
                 fila_dict[col] = val
             datos.append(fila_dict)
 
-    # Obtenemos las plantillas guardadas por el usuario
+    # 🌟 SI LA PETICIÓN ES AJAX O SE SOLICITA JSON, DEVOLVEMOS SOLO LOS DATOS
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.GET.get('format') == 'json':
+        return JsonResponse({
+            'status': 'success',
+            'datos': datos,
+            'fecha_inicio': fecha_inicio_val.isoformat(),
+            'fecha_fin': fecha_fin_val.isoformat()
+        })
+
+    # Si es carga normal de la página/iframe
     plantillas_qs = PlantillaPivotUsuario.objects.filter(
         reporte_base_id=reporte.id_reporte,
         usuario=request.user
@@ -123,7 +133,6 @@ def reporte_dinamico_view(request, slug):
         item['fecha_fin_macro'] = item['fecha_fin_macro'] or reporte.fecha_fin_macro
         plantillas_usuario_list.append(item)
 
-    # Plantilla DEFAULT base
     lista_plantillas = [
         {
             'id': 0,
@@ -142,6 +151,8 @@ def reporte_dinamico_view(request, slug):
         'configuracion_pivot': reporte.configuracion_pivot or [],
         'plantillas_usuario': lista_plantillas,
         'reporte_id': reporte.id_reporte,
+        'fecha_inicio_actual': fecha_inicio_val.isoformat(),
+        'fecha_fin_actual': fecha_fin_val.isoformat(),
     })
     
     return render(request, 'reportes/pivot_generico.html', context)

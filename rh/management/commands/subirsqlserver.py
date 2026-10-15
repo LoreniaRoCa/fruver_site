@@ -6,6 +6,7 @@ import pyodbc
 from dotenv import load_dotenv
 from supabase import create_client, Client
 from django.core.management.base import BaseCommand
+from django.db import connection  # 🌟 Permite ejecutar TRUNCATE instantáneo
 
 
 # 1. Localizar y cargar el .env
@@ -16,13 +17,12 @@ class Command(BaseCommand):
     help = 'Sincroniza los datos de SQL Server con Supabase (Opción 1: Inventario, Opción 2: FruDetalleVentas)'
 
     def add_arguments(self, parser):
-        # Permite recibir un parámetro numérico para seleccionar la tabla
         parser.add_argument(
             '--tabla',
             '-t',
             type=int,
             default=1,
-            help='1: Inventario (sp_frupa_inventario -> conc_eye_inventario)\n2: Detalle de Ventas (FruDetalleVentas -> FruDetalleVentas)'
+            help='1: Inventario (sp_frupa_inventario -> rep_eye_inventario)\n2: Detalle de Ventas (sp_fru_ventas_pivot -> rep_detalleventas)'
         )
 
     def handle(self, *args, **options):
@@ -67,7 +67,7 @@ class Command(BaseCommand):
 
             elif opcion_tabla == 2:
                 self.stdout.write("🟡 [Opción 2] Consultando tabla FruDetalleVentas...")
-                query = "exec AgroSmart_FRUSA.dbo.sp_fru_ventas_pivot '20130101', '20261231'"
+                query = "exec AgroSmart_FRUSA.dbo.sp_fru_ventas_pivot '20130101', '20261231', 1"
                 tabla_destino = "rep_detalleventas"
 
             else:
@@ -95,21 +95,18 @@ class Command(BaseCommand):
             ]
             conn.close()
 
-            # Conexión y reemplazo en Supabase
-            supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-            
-            self.stdout.write(f"🟡 Limpiando datos anteriores en Supabase ({tabla_destino})...")
-            
-            if opcion_tabla == 1:
-                supabase.table(tabla_destino).delete().neq("c_codigo_tem", "00000000").execute()
-            elif opcion_tabla == 2:
-                # Se eliminan los registros utilizando una condición que siempre evalúa true
-                supabase.table(tabla_destino).delete().neq("Factura", "____IMPOSIBLE_MATCH____").execute()
+            # ⚡ VACIADO INSTANTÁNEO CON TRUNCATE (Evita el timeout de PostgREST)
+            self.stdout.write(f"🟡 Limpiando datos anteriores en Supabase ({tabla_destino}) mediante TRUNCATE...")
+            with connection.cursor() as db_cursor:
+                # Se utiliza comilla doble para respetar mayúsculas/minúsculas exactas
+                db_cursor.execute(f'TRUNCATE TABLE public."{tabla_destino}" RESTART IDENTITY;')
 
-            self.stdout.write(f"🟡 Insertando nuevos datos en {tabla_destino}...")
+            # Conexión e inserción masiva en Supabase
+            supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+            self.stdout.write(f"🟡 Insertando nuevos datos en {tabla_destino} ({len(datos_a_subir)} registros)...")
             
-            # Subida por lotes (batching de 1000 en 1000 por si la tabla de ventas es grande)
-            batch_size = 1000
+            # Subida por lotes (batching de 500 en 500 para evitar sobrecargar payloads HTTP)
+            batch_size = 500
             for i in range(0, len(datos_a_subir), batch_size):
                 batch = datos_a_subir[i:i + batch_size]
                 supabase.table(tabla_destino).insert(batch).execute()

@@ -21,7 +21,6 @@ from django.db.models import Q
 from unfold.admin import ModelAdmin
 from unfold.forms import ActionForm
 
-
 class CustomActionForm(ActionForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -504,6 +503,7 @@ class EmpresaFilterAdmin(ExcelImportAdmin):
     Clase base que filtra la información según la empresa en sesión.
     Si el registro tiene empresa=NULL se considera GENERAL y se muestra a todos.
     """
+    exclude = ('empresa',)  # 👈 Oculta el campo Empresa en todos los catálogos heredados
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         empresa_activa = request.session.get('empresa_activa') or request.session.get('empresa_id')
@@ -520,10 +520,11 @@ class EmpresaFilterAdmin(ExcelImportAdmin):
         return qs
 
     def save_model(self, request, obj, form, change):
-        # Asigna automáticamente la empresa activa al crear un nuevo registro si no tiene una
+        # Asigna automáticamente la empresa activa de la sesión si no tiene una asignada
         if hasattr(obj, 'empresa') and not obj.empresa_id:
-            obj.empresa_id = request.session.get('empresa_id')
+            obj.empresa_id = request.session.get('empresa_activa') or request.session.get('empresa_id')
         super().save_model(request, obj, form, change)
+
 # ==========================================
 #   INLINE: CLASIFICACIÓN POR PUESTO
 # ==========================================
@@ -679,6 +680,7 @@ class EmpleadoAdminForm(forms.ModelForm):
     class Meta:
         model = Empleado
         fields = '__all__'
+        exclude = ('empresa',)  # 👈 Oculta el selector de Empresa en el formulario de Empleado
 
         # 🌟 AGREGA ESTA PROPIEDAD AQUÍ ABAJO:
         # 🌟 AQUÍ ESPECIFICAS EL ANCHO IDÉNTICO PARA TODOS LOS CAMPOS
@@ -716,20 +718,40 @@ class EmpleadoAdminForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        # 1. Extraemos el objeto 'request' si fue proporcionado desde el Admin
+        self.request = kwargs.pop('request', None)        
         super().__init__(*args, **kwargs)
+
+        # 2. Obtenemos la empresa activa seleccionada en la sesión
+        empresa_activa = None
+        if self.request:
+            empresa_activa = self.request.session.get('empresa_activa') or self.request.session.get('empresa_id')
+
+        # 3. Filtrar Departamentos por Empresa Activa
+        if 'id_departamento' in self.fields:
+            qs_dep = Departamento.objects.all()
+            if empresa_activa:
+                qs_dep = qs_dep.filter(empresa_id=empresa_activa)
+            self.fields['id_departamento'].queryset = qs_dep.order_by('descripcion')
+
+        # 4. Filtrar Puestos por Empresa Activa
+        if 'id_puesto' in self.fields:
+            qs_puesto = Puesto.objects.all()
+            if empresa_activa:
+                qs_puesto = qs_puesto.filter(empresa_id=empresa_activa)
+            self.fields['id_puesto'].queryset = qs_puesto.order_by('descripcion')
+
+        # 5. Filtrar Jefes por Empresa Activa
+        if 'id_jefe' in self.fields:
+            qs_jefe = Empleado.objects.all()
+            if empresa_activa:
+                qs_jefe = qs_jefe.filter(empresa_id=empresa_activa)
+            self.fields['id_jefe'].queryset = qs_jefe.order_by('nombre_largo')
 
         # 🌟 NUEVO: FORZAR ORDENAMIENTO ALFABÉTICO EN LOS COMBOS PRINCIPALES DEL FORMULARIO
         if 'user' in self.fields:
             self.fields['user'].queryset = self.fields['user'].queryset.order_by('username')
         
-        if 'id_jefe' in self.fields:
-            self.fields['id_jefe'].queryset = Empleado.objects.order_by('nombre_largo')
-            
-        if 'id_puesto' in self.fields:
-            self.fields['id_puesto'].queryset = Puesto.objects.order_by('descripcion')
-            
-        if 'id_departamento' in self.fields:
-            self.fields['id_departamento'].queryset = Departamento.objects.order_by('descripcion')
 
         if self.instance and self.instance.pk:
             empleado_id = self.instance.pk
@@ -788,6 +810,7 @@ admin_site.register(Puesto, PuestoAdmin)
 class DepartamentoAdmin(EmpresaFilterAdmin):
     model_class = Departamento
     pk_field_name = 'id_departamento'
+    exclude = ('empresa',)  # 👈 Asegura que se excluya de la vista
     excel_columns = ['id_departamento', 'descripcion']
     list_display = ('id_departamento', 'descripcion', 'acciones_rh')
     search_fields = ('descripcion',)
@@ -1077,6 +1100,7 @@ class EmpleadoAdmin(CatalogosOrdenadosAdmin, EmpresaFilterAdmin):
     form = EmpleadoAdminForm  
     model_class = Empleado
     pk_field_name = 'id_empleado'
+    exclude = ('empresa',)  # 👈 Asegura que se excluya de la vista
     excel_columns = ['id_empleado', 'nombre_largo', 'id_puesto_id', 'id_departamento_id', 'CorreoElectronico', 'estado_empleado', 'fechaalta', 'se_evalua']
     list_display = ('id_empleado', 'nombre_largo', 'id_puesto', 'id_departamento', 'id_jefe', 'es_jefe_departamento', 'CorreoElectronico', 'estado_empleado', 'fechaalta', 'se_evalua', 'acciones_rh')
     # 🌟 APLICAR FILTROS PERSONALIZADOS AQUÍ:
@@ -1090,14 +1114,23 @@ class EmpleadoAdmin(CatalogosOrdenadosAdmin, EmpresaFilterAdmin):
     )
     search_fields = ('nombre_largo', 'id_puesto__descripcion', 'CorreoElectronico', 'id_jefe__nombre_largo')
 
-# 🌟 ÚNICA DEFINICIÓN:
+    # 🌟 ÚNICA DEFINICIÓN:
     action_form = CustomActionForm
     action_submit_label = "Ejecutar"
 
     inlines = []  
     actions = [enviar_enlaces_seleccionados]
-    # 🌟 AGREGA ESTE MÉTODO JUSTO AQUÍ ADENTRO:
 
+    # 🌟 Sobrescribimos get_form_kwargs para que el admin de Django le pase 'request' al Formulario
+    def get_form(self, request, obj=None, **kwargs):
+        FormClass = super().get_form(request, obj, **kwargs)
+        class ModelFormWithRequest(FormClass):
+            def __new__(cls, *args, **form_kwargs):
+                form_kwargs['request'] = request
+                return FormClass(*args, **form_kwargs)
+        return ModelFormWithRequest    
+
+    # 🌟 AGREGA ESTE MÉTODO JUSTO AQUÍ ADENTRO:
     def change_view(self, request, object_id, form_url='', extra_context=None):
         extra_context = extra_context or {}
         obj = self.get_object(request, object_id)
