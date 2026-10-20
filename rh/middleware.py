@@ -64,6 +64,7 @@ class RestringirAccesoAdminMiddleware:
             admin_site.site_title = titulo_modulo
 
             settings.UNFOLD["SIDEBAR"]["navigation"] = []
+
         # 4. Módulo Recursos Humanos
         elif '/admin/rh/' in path or any(k in path for k in ['evaluacion', 'empleado', 'puesto', 'departamento', 'competencia', 'resumen', 'panel']):
             titulo_modulo = "Recursos Humanos"
@@ -72,7 +73,25 @@ class RestringirAccesoAdminMiddleware:
             admin_site.site_header = titulo_modulo
             admin_site.site_title = titulo_modulo
 
-            settings.UNFOLD["SIDEBAR"]["navigation"] = getattr(settings, 'NAV_RECURSOS_HUMANOS', [])
+            # 🌟 EVALUACIÓN CONDICIONAL DE PERMISOS PARA EL MENÚ LATERAL:
+            if request.user.is_authenticated and (request.user.is_superuser or request.user.is_staff):
+                # Si es Superusuario o Staff, se muestra todo el menú completo configurado en settings.py
+                settings.UNFOLD["SIDEBAR"]["navigation"] = getattr(settings, 'NAV_RECURSOS_HUMANOS', [])
+            else:
+                # Si es un empleado normal, SOLO se muestra "Mi Panel de Evaluación"
+                settings.UNFOLD["SIDEBAR"]["navigation"] = [
+                    {
+                        "title": "Evaluaciones de Desempeño",
+                        "separator": True,
+                        "items": [
+                            {
+                                "title": "Mi Panel de Evaluación",
+                                "link": "/admin/panel-evaluacion/",
+                                "icon": "badge",
+                            }
+                        ]
+                    }
+                ]
 
         else:
             settings.UNFOLD["SIDEBAR"]["navigation"] = []
@@ -80,6 +99,8 @@ class RestringirAccesoAdminMiddleware:
         # 🌟 OBLIGATORIO: Generar y retornar la respuesta HTTP a Django
         response = self.get_response(request)
         return response
+
+
 def obtener_nav_tablas_dinamicas():
     """
     Consulta la tabla rep_pivot_dinamico en la BD 
@@ -107,6 +128,8 @@ def obtener_nav_tablas_dinamicas():
             "items": items,
         }
     ]        
+
+
 class ForzarCambioPasswordMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
