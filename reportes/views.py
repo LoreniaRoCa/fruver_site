@@ -1,3 +1,4 @@
+import os
 import json
 from decimal import Decimal
 from datetime import date, datetime
@@ -6,10 +7,13 @@ from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
 from django.http import JsonResponse
+from django.core.exceptions import PermissionDenied
 from django.db import connection
 from django.contrib import admin
 from .models import Pivot_Dinamico, PlantillaPivotUsuario
-
+from rh.models import Empresa  # 🟢 IMPORTACIÓN DEL MODELO EMPRESA
+from django.conf import settings  # 🟢 AGREGADO
+from django.templatetags.static import static  # 🟢 AGREGADO
 
 def resolver_macro_fecha(token):
     """Convierte tokens como '-3m', 'm', 'A1', 'a' a objetos date de Python."""
@@ -26,6 +30,7 @@ def resolver_macro_fecha(token):
     if token == "-1a":
         return date(hoy.year - 1, 1, 1)
     if token == "M":
+
         return date(hoy.year, hoy.month, 1)
     if token == "m":
         # Último día del mes actual
@@ -57,21 +62,51 @@ def resolver_macro_fecha(token):
     except ValueError:
         return hoy
 
-
-# views.py de Reportes
+def usuario_puede_ver_reporte(user, reporte):
+    """Valida permiso_codename del reporte (ej. 'ver_ventas_pivot' o 'reportes.ver_ventas_pivot')."""
+    codename = (reporte.permiso_codename or "").strip()
+    if not codename:
+        return True
+    if "." not in codename:
+        codename = f"reportes.{codename}"
+    return user.has_perm(codename)
 
 # reportes/views.py
 
 @login_required
 def reporte_dinamico_view(request, slug):
     reporte = get_object_or_404(Pivot_Dinamico, slug=slug, activo=True)
-    empresa_activa = request.session.get('empresa_activa') or request.session.get('empresa_id')
+    if not usuario_puede_ver_reporte(request.user, reporte):
+        raise PermissionDenied
+    # 🟢 Unificar el nombre de la variable
+    empresa_activa_id = request.session.get('empresa_activa') or request.session.get('empresa_id')
+
+    # Fallbacks por defecto usando static()
+    logo_empresa_url = static("img/logo.png")
+    nombre_empresa = "EMPRESA"
+
+    if empresa_activa_id:
+        empresa = Empresa.objects.filter(pk=empresa_activa_id).first()
+        if empresa:
+            nombre_empresa = empresa.nombre
+            
+            if hasattr(empresa, 'logo') and empresa.logo:
+                logo_empresa_url = empresa.logo.url
+            else:
+                # Mapeo a static/img/logo_<id_empresa>.png
+                empresa_id_str = str(empresa_activa_id).strip().lower()
+                rel_path = f"img/logo_{empresa_id_str}.png"
+                full_path = os.path.join(settings.BASE_DIR, 'static', rel_path)
+                
+                if os.path.exists(full_path):
+                    logo_empresa_url = static(rel_path)
+                else:
+                    logo_empresa_url = static("img/logo.png")
 
     # Captura de parámetros desde GET
     fecha_inicio_raw = request.GET.get('fecha_inicio')
     fecha_fin_raw = request.GET.get('fecha_fin')
 
-    # Resolver las fechas (ya sean macros '-3m' o fechas ISO 'YYYY-MM-DD')
     if fecha_inicio_raw:
         fecha_inicio_val = resolver_macro_fecha(fecha_inicio_raw)
     else:
@@ -88,11 +123,11 @@ def reporte_dinamico_view(request, slug):
         params = []
 
         if num_params == 3:
-            params = [empresa_activa, fecha_inicio_val, fecha_fin_val]
+            params = [empresa_activa_id, fecha_inicio_val, fecha_fin_val]
         elif num_params == 2:
             params = [fecha_inicio_val, fecha_fin_val]
         elif num_params == 1:
-            params = [empresa_activa]
+            params = [empresa_activa_id]
 
         if params:
             cursor.execute(reporte.query_sql, params)
@@ -112,16 +147,15 @@ def reporte_dinamico_view(request, slug):
                 fila_dict[col] = val
             datos.append(fila_dict)
 
-    # 🌟 SI LA PETICIÓN ES AJAX O SE SOLICITA JSON, DEVOLVEMOS SOLO LOS DATOS
     if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.GET.get('format') == 'json':
-        return JsonResponse({
-            'status': 'success',
-            'datos': datos,
-            'fecha_inicio': fecha_inicio_val.isoformat(),
-            'fecha_fin': fecha_fin_val.isoformat()
-        })
-
-    # Si es carga normal de la página/iframe
+            return JsonResponse({
+                'status': 'success',
+                'datos': datos,
+                'fecha_inicio': fecha_inicio_val.isoformat(),
+                'fecha_fin': fecha_fin_val.isoformat(),
+                'nombre_empresa': nombre_empresa,
+                'logo_empresa_url': logo_empresa_url
+            })
     plantillas_qs = PlantillaPivotUsuario.objects.filter(
         reporte_base_id=reporte.id_reporte,
         usuario=request.user
@@ -147,6 +181,8 @@ def reporte_dinamico_view(request, slug):
     context = admin.site.each_context(request)
     context.update({
         'titulo_reporte': reporte.nombre,
+        'nombre_empresa': nombre_empresa,
+        'logo_empresa_url': logo_empresa_url,  # 👈 Pasamos el logo al contexto
         'datos_json': datos,
         'configuracion_pivot': reporte.configuracion_pivot or [],
         'plantillas_usuario': lista_plantillas,
@@ -160,8 +196,11 @@ def reporte_dinamico_view(request, slug):
 
 @login_required
 def lista_tablas_dinamicas_view(request):
-    reportes = Pivot_Dinamico.objects.filter(activo=True).order_by('orden', 'nombre')
-    
+    reportes = [
+        r for r in Pivot_Dinamico.objects.filter(activo=True).order_by('orden', 'nombre')
+        if usuario_puede_ver_reporte(request.user, r)
+    ]
+
     context = admin.site.each_context(request)
     context.update({
         "reportes": reportes
@@ -183,6 +222,10 @@ def guardar_plantilla_pivot(request):
         
         if not reporte_id or not nombre or not config_json:
             return JsonResponse({'status': 'error', 'message': 'Faltan datos requeridos'}, status=400)
+
+        reporte = Pivot_Dinamico.objects.filter(pk=reporte_id, activo=True).first()
+        if not reporte or not usuario_puede_ver_reporte(request.user, reporte):
+            return JsonResponse({'status': 'error', 'message': 'No tiene permiso sobre este reporte'}, status=403)
 
         plantilla, created = PlantillaPivotUsuario.objects.update_or_create(
             reporte_base_id=reporte_id,

@@ -5,10 +5,13 @@
 {{ block.super }}
 <!-- DevExtreme CSS (Tema Light) -->
 <link rel="stylesheet" href="https://cdn3.devexpress.com/jslib/23.2.5/css/dx.light.css">
+<!-- Google Material Symbols -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
 
 <style>
+    /* 2. Extender el contenedor hasta el fondo de la pantalla */
     #tabpanel-container {
-        height: calc(100vh - 110px);
+        height: calc(100vh - 75px) !important;
         width: 100%;
         background-color: #f8fafc;
         border-radius: 8px;
@@ -18,23 +21,42 @@
 
     .tab-frame {
         width: 100%;
-        height: calc(100vh - 160px);
+        height: calc(100vh - 125px) !important;
         border: none;
         background-color: #ffffff;
     }
 
+    /* 3. Personalización de bordes grises tenues (en lugar de azul) */
     .dx-tabpanel-tabs {
         background-color: #ffffff !important;
         border-bottom: 1px solid #e2e8f0 !important;
+    }
+
+    /* Quitar el borde/línea de enfoque azul de la pestaña seleccionada */
+    .dx-tabpanel .dx-tab-selected {
+        border-bottom: 2px solid #94a3b8 !important; /* Borde gris tenue */
+        color: #1e293b !important;
+    }
+
+    .dx-tabpanel .dx-tab-selected::after {
+        border-color: #94a3b8 !important; /* Sobreescribe la línea inferior activa de DevExpress */
+    }
+
+    .dx-tab {
+        border-color: #f1f5f9 !important;
+    }
+
+    .dx-tabpanel-container {
+        border: 1px solid #e2e8f0 !important;
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="w-full h-full p-2 bg-gray-50 dark:bg-gray-900">
-    <!-- Contenedor del TabPanel -->
+<div class="w-full h-full p-1 bg-gray-50 dark:bg-gray-900">
+    <!-- Contenedor del TabPanel DevExpress -->
     <div id="tabpanel-container"></div>
-    <!-- Load Panel Nativo de DevExpress -->
+    <!-- Panel de Carga Nativo -->
     <div id="loading-panel"></div>
 </div>
 
@@ -46,7 +68,7 @@
     var loadPanelInstance;
 
     $(function() {
-        // 1. Inicializar Panel de Carga DevExpress
+        // Inicializar Panel de Carga DevExpress
         loadPanelInstance = $("#loading-panel").dxLoadPanel({
             shadingColor: "rgba(255, 255, 255, 0.7)",
             position: { of: "#tabpanel-container" },
@@ -58,23 +80,32 @@
             message: "Cargando información del reporte..."
         }).dxLoadPanel("instance");
 
-        // 2. Inicializar TabPanel
+        // Inicializar TabPanel DevExpress
         tabPanelInstance = $("#tabpanel-container").dxTabPanel({
             dataSource: [],
             itemTitleTemplate: function(itemData, itemIndex, itemElement) {
-                itemElement.append('<span class="dx-tab-text">' + itemData.title + '</span>');
+                var $titleWrapper = $('<div class="flex items-center gap-1.5 px-1"></div>');
                 
+                // 1. Renderizar Ícono de Material Symbols correctamente sin texto extra
+                var $iconElem = $('<i class="material-symbols-outlined text-base text-gray-500">bar_chart</i>');
+                
+                // Limpiar cualquier posible prefijo o texto 'bar_chart' pegado al título
+                var tituloLimpio = (itemData.title || '').replace(/^bar_chart\s*/i, '');
+                var $textElem = $('<span class="dx-tab-text font-medium text-xs text-gray-700">' + tituloLimpio + '</span>');
+                
+                // Botón para cerrar pestaña
                 var $closeBtn = $('<i class="dx-icon dx-icon-close ml-2 text-xs text-gray-400 hover:text-red-500 cursor-pointer"></i>');
                 $closeBtn.on("click", function(e) {
                     e.stopPropagation();
                     cerrarPestana(itemData.id);
                 });
-                itemElement.append($closeBtn);
+
+                $titleWrapper.append($iconElem).append($textElem).append($closeBtn);
+                itemElement.append($titleWrapper);
             },
             itemTemplate: function(itemData) {
                 var $iframe = $('<iframe class="tab-frame" src="' + itemData.url + '"></iframe>');
                 
-                // Ocultar la animación de carga cuando el iframe termine de descargar la información
                 $iframe.on('load', function() {
                     if (loadPanelInstance) {
                         loadPanelInstance.hide();
@@ -89,37 +120,55 @@
             noDataText: "Selecciona un reporte en el menú lateral para abrir su pestaña."
         }).dxTabPanel("instance");
 
+        procesarUrlParam();
+
+        // Interceptar clics en el menú lateral
+        $(document).on('click', 'a[href*="/reportes/tablas/?open="]', function(e) {
+            var href = $(this).attr('href');
+            var urlParams = new URLSearchParams(href.split('?')[1]);
+            var openSlug = urlParams.get('open');
+            var titulo = $(this).text().trim() || openSlug.replace(/-/g, ' ').toUpperCase();
+
+            if (openSlug) {
+                e.preventDefault();
+                window.history.pushState({}, '', href);
+                abrirTabReporte(openSlug, titulo, '/reportes/pivot/' + openSlug + '/');
+            }
+        });
+    });
+
+    function procesarUrlParam() {
         var urlParams = new URLSearchParams(window.location.search);
         var openSlug = urlParams.get('open');
         if (openSlug) {
-            var nombreReporte = openSlug.replace('-', ' ').toUpperCase();
+            var nombreReporte = openSlug.replace(/[-_]/g, ' ').toUpperCase();
             abrirTabReporte(openSlug, nombreReporte, '/reportes/pivot/' + openSlug + '/');
         }
-    });
+    }
 
     window.abrirTabReporte = function(id, titulo, url) {
         if (!tabPanelInstance) return;
 
-        // Mostrar relojito/animación de carga inmediatamente
         if (loadPanelInstance) {
             loadPanelInstance.option("message", "Cargando " + titulo + "...");
             loadPanelInstance.show();
         }
+
+        var urlLimpia = ('/reportes/pivot/' + id + '/').replace(/\/+/g, '/');
 
         var items = tabPanelInstance.option("dataSource") || [];
         var indexExistente = items.findIndex(function(item) { return item.id === id; });
 
         if (indexExistente !== -1) {
             tabPanelInstance.option("selectedIndex", indexExistente);
-            // Si ya estaba cargado previamente, ocultamos el loader tras un leve delay
             setTimeout(function() {
-                loadPanelInstance.hide();
+                if (loadPanelInstance) loadPanelInstance.hide();
             }, 300);
         } else {
             items.push({
                 id: id,
                 title: titulo,
-                url: url
+                url: urlLimpia
             });
             tabPanelInstance.option("dataSource", items);
             tabPanelInstance.option("selectedIndex", items.length - 1);

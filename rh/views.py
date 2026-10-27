@@ -8,11 +8,10 @@ from django.contrib.auth.views import LoginView
 from django.core.mail import send_mail
 from django.db.models import Avg, Q 
 from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, user_passes_test, permission_required
 from django.contrib import messages
 from django.apps import apps 
 from django.http import HttpResponse
-from django.contrib.auth.decorators import user_passes_test
 from django.contrib.auth import login
 from django.contrib import messages
 from django.contrib import admin
@@ -34,7 +33,6 @@ from .models import (
 )
 from django.db import connection
 from django.utils import timezone
-
 
 class CustomAdminLoginView(LoginView):
     template_name = "admin/login.html"
@@ -364,6 +362,7 @@ def Exam_clean_text(text):
     return text if text != "" else None
 
 @login_required
+@permission_required('rh.ver_consolidado_resultados', raise_exception=True)
 def resumen_evaluaciones_view(request):
     try:
         usuario_logueado = Empleado.objects.get(user=request.user)

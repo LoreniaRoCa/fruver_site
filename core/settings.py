@@ -79,7 +79,8 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     # 🟢 Tu nuevo middleware de restricción de menú:
-    'rh.middleware.RestringirAccesoAdminMiddleware',
+    'core_app.middleware.NavegacionDinamicaMiddleware',    
+    #'rh.middleware.RestringirAccesoAdminMiddleware',
     'rh.middleware.ForzarCambioPasswordMiddleware',
 ]
 
@@ -153,8 +154,9 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 # 🔴 Comentamos esta línea para eliminar el WARNING W004:
 # STATICFILES_DIRS = [ BASE_DIR / 'static' ]
 
-# 🟢 Le indicamos a Django la ubicación FÍSICA de Unfold sin duplicar:
+# 🟢 CONFIGURACIÓN CORRECTA DE DIRECTORIOS ESTÁTICOS
 STATICFILES_DIRS = [
+    BASE_DIR / 'static',  # 👈 Permite encontrar static/img/logo_frusa.png, logo.png, etc.
     os.path.join(os.path.dirname(unfold.__file__), 'static'),
 ]
 

@@ -18,6 +18,16 @@ class Pivot_Dinamico(models.Model):
     fecha_fin_macro = models.CharField(max_length=20, default="m", verbose_name="Macro Fecha Final Default", help_text="Ejemplo: m, a, Hoy")
 
     icono = models.CharField(max_length=50, default="bar_chart", verbose_name="Icono de Material Symbols")
+
+# 🌟 NUEVO CAMPO: Identificador del permiso en auth_permission (ej. 'ver_inventario_pivot')
+    permiso_codename = models.CharField(
+        max_length=100, 
+        null=True, 
+        blank=True, 
+        verbose_name="Codename de Permiso Requerido",
+        help_text="Codename registrado en auth_permission (ej. ver_inventario_pivot). Dejar vacío si es público."
+    )
+        
     activo = models.BooleanField(default=True, verbose_name="¿Activo?")
     orden = models.IntegerField(default=0, verbose_name="Orden en el Menú")
 
@@ -26,6 +36,12 @@ class Pivot_Dinamico(models.Model):
         verbose_name_plural = "Reportes Dinámicos"
         ordering = ['orden', 'nombre']
         db_table = 'rep_pivot_dinamico'
+        # 🌟 NUEVO: PERMISOS PARA LAS TABLAS DINÁMICAS / REPORTES
+        permissions = [
+            ("ver_inventario_pivot", "Puede ver el reporte: Inventario Pivot"),
+            ("ver_ventas_pivot", "Puede ver el reporte: Ventas Pivot"),
+            # Puedes ir agregando aquí permisos para otros reportes que crees a futuro
+        ]
 
     def __str__(self):
         return self.nombre

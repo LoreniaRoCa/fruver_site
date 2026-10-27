@@ -14,6 +14,14 @@ class Empresa(models.Model):
     id_empresa = models.CharField(max_length=20, primary_key=True) # ej: 'FRUSA', 'EMPRESA_B'
     nombre = models.CharField(max_length=150) # ej: 'Fruta S.A. de C.V.'
     activa = models.BooleanField(default=True)
+    # 🌟 Campo para el Logotipo
+    logo = models.ImageField(
+        upload_to='empresas/logos/', 
+        null=True, 
+        blank=True, 
+        verbose_name="Logotipo de la Empresa",
+        help_text="Suba la imagen del logotipo en formato PNG o JPG."
+    )
 
     def __str__(self):
         return f"{self.id_empresa} - {self.nombre}"
@@ -205,7 +213,12 @@ class Evaluacion(models.Model):
         verbose_name = "Evaluación"          # Cómo se dice en singular
         verbose_name_plural = "Evaluaciones" # Cómo se mostrará en el menú de la izquierda
 
-
+        # 🌟 AQUÍ AGREGAS LOS PERMISOS DE CADA VISTA DEL RECUADRO ROJO:
+        permissions = [
+            ("ver_panel_evaluacion", "Puede ver la vista: Mi Panel de Evaluación"),
+            ("ver_consolidado_resultados", "Puede ver la vista: Consolidado Resultados"),
+            ("ver_asignacion_competencias", "Puede ver la vista: Asignación de Competencias"),
+        ]
 class EvaluacionDet(models.Model):
     id_evaluacion = models.ForeignKey(Evaluacion, models.DO_NOTHING, db_column='id_evaluacion')
     id_competencia = models.ForeignKey(Competencia, models.DO_NOTHING, db_column='id_competencia')

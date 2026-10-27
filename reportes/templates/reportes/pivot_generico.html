@@ -29,6 +29,14 @@
             position: relative !important;
         }
 
+        /* Columnas con su ancho natural (como el PivotGrid de Windows): DevExtreme pone las tablas de
+           datos y encabezados de columna al 100% y estira las columnas hasta llenar el grid
+           (con una sola columna de datos, ésta ocupaba todo el ancho). */
+        #pivotgrid .dx-pivotgrid-area-data table,
+        #pivotgrid .dx-pivotgrid-horizontal-headers table {
+            width: auto !important;
+        }
+
         .dx-pivotgrid-border-hidden .dx-pivotgrid-area {
             font-size: 13px;
         }
@@ -109,7 +117,7 @@
             margin-right: 3px !important;
         }
 
-        /* 1. Negrita para el Gran Total (Etiquetas y Valores) */
+        /* 1. Negrita para el Gran Total */
         .dx-pivotgrid-area-rows td.dx-grandtotal,
         .dx-pivotgrid-area-data tbody > tr.dx-grandtotal > td,
         .dx-pivotgrid-area-data tbody > tr:last-child > td.dx-grandtotal {
@@ -117,7 +125,7 @@
             color: #0f172a !important;
         }
 
-        /* 2. Negrita para Subtotales por Grupo (ej. 'ACELGA Total', 'AGUACATE Total', etc.) */
+        /* 2. Negrita para Subtotales por Grupo */
         .dx-pivotgrid-area-rows td.dx-total,
         .dx-pivotgrid-area-data tbody > tr.dx-total > td,
         .dx-pivotgrid-area-data td.dx-total {
@@ -150,10 +158,46 @@
             color: #0f172a;
         }
 
+        .btn-toolbar-win:disabled,
+        .btn-toolbar-win:disabled:hover {
+            opacity: 0.45;
+            cursor: not-allowed;
+            background-color: #ffffff;
+            border-color: #cbd5e1;
+            color: #334155;
+        }
+
         .btn-toolbar-win i {
             font-size: 16px;
             margin-bottom: 2px;
         }
+
+        /* Etiquetas de la barra de filtros activos */
+        .chip-filtro {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 6px;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            background-color: #f8fafc;
+            color: #1e293b;
+        }
+
+        .chip-filtro .campo { color: #c2410c; font-weight: 600; }
+        .chip-filtro .operador { color: #1d4ed8; }
+        .chip-filtro .valor { color: #15803d; }
+        .chip-filtro .union { color: #64748b; font-weight: 600; }
+
+        .chip-filtro button {
+            color: #94a3b8;
+            font-weight: bold;
+            line-height: 1;
+        }
+
+        .chip-filtro button:hover { color: #dc2626; }
+
+        .filtro-inactivo #texto-filtros { opacity: 0.45; text-decoration: line-through; }
     </style>
 </head>
 <body class="bg-gray-50 p-3">
@@ -172,47 +216,46 @@
                 <!-- Rango de Fechas -->
                 <div class="flex items-center gap-1.5 border-l pl-2.5 border-gray-300">
                     <span class="text-xs font-bold text-gray-700">Del:</span>
-                    <div id="fecha-inicio" class="w-28"></div>
+                    <div id="fecha-inicio" class="w-[125px]"></div>
                     <span class="text-xs font-bold text-gray-700">Al:</span>
-                    <div id="fecha-fin" class="w-28"></div>
+                    <div id="fecha-fin" class="w-[125px]"></div>
                 </div>
 
                 <!-- GRUPO DE BOTONES COMPACTOS TIPO WINDOWS -->
                 <div class="flex items-center gap-1 border-l pl-2.5 border-gray-300">
-                    <!-- Actualizar -->
                     <button type="button" id="btn-actualizar-win" class="btn-toolbar-win" title="Actualizar datos">
                         <i class="dx-icon-refresh text-blue-600"></i>
                         <span>Actualizar</span>
                     </button>
 
-                    <!-- Agregar / Guardar Como -->
                     <button type="button" id="btn-nueva-win" class="btn-toolbar-win" title="Guardar como nueva plantilla">
                         <i class="dx-icon-add text-emerald-600"></i>
                         <span>Agregar</span>
                     </button>
 
-                    <!-- Guardar -->
                     <button type="button" id="btn-guardar-win" class="btn-toolbar-win" title="Guardar cambios en plantilla actual">
                         <i class="dx-icon-save text-blue-700"></i>
                         <span>Guardar</span>
                     </button>
 
-                    <!-- Exportar -->
                     <button type="button" id="btn-exportar-win" class="btn-toolbar-win" title="Exportar a Excel">
                         <i class="dx-icon-xlsxfile text-green-700"></i>
                         <span>Exportar</span>
                     </button>
 
-                    <!-- SubTotal -->
                     <button type="button" id="btn-subtotales-win" class="btn-toolbar-win" title="Mostrar u ocultar subtotales">
                         <i class="dx-icon-variable text-amber-600"></i>
                         <span>SubTotal</span>
                     </button>
 
-                    <!-- Ver Gráfica -->
                     <button type="button" id="btn-chart-win" class="btn-toolbar-win" title="Mostrar u ocultar gráfica">
                         <i class="dx-icon-chart text-purple-600"></i>
                         <span>Gráfica</span>
+                    </button>
+
+                    <button type="button" id="btn-filtro-win" class="btn-toolbar-win" title="Filtro avanzado (contiene, no contiene, comienza por...)">
+                        <i class="dx-icon-filter text-sky-700"></i>
+                        <span>Filtro</span>
                     </button>
                 </div>
             </div>
@@ -228,8 +271,22 @@
         </div>
 
         <!-- Tabla Dinámica DevExpress -->
-        <div id="pivotgrid" class="w-full shadow-sm rounded-lg overflow-hidden"></div>
+        <div id="pivotgrid" class="w-full shadow-sm rounded-lg"></div>
+
+        <!-- Barra de filtros activos (como el panel de filtro del PivotGrid de Windows) -->
+        <div id="barra-filtros" class="hidden mt-1 px-2 py-1.5 bg-white rounded-lg border border-gray-200 shadow-sm flex items-center gap-2 text-xs">
+            <button type="button" id="btn-quitar-filtros" class="text-red-600 font-bold px-1 hover:bg-red-50 rounded" title="Quitar todos los filtros">&times;</button>
+            <input type="checkbox" id="chk-filtro-activo" checked title="Activar o desactivar el filtro avanzado">
+            <div id="texto-filtros" class="flex-1 flex flex-wrap items-center gap-1 min-w-0"></div>
+            <button type="button" id="btn-editar-filtro" class="px-2 py-1 border border-gray-300 rounded hover:bg-gray-100 whitespace-nowrap">Editar filtro</button>
+        </div>
     </div>
+
+    <!-- Editor de filtro avanzado -->
+    <div id="popup-filtro"></div>
+
+    <!-- Panel de espera mientras se consultan y procesan los datos -->
+    <div id="panel-carga"></div>
 
     <!-- Inyección de JSON y Variables desde Django -->
     {{ datos_json|json_script:"datos-json-data" }}
@@ -239,6 +296,10 @@
     
     {{ fecha_inicio_actual|default:""|json_script:"fecha-inicio-actual-data" }}
     {{ fecha_fin_actual|default:""|json_script:"fecha-fin-actual-data" }}
+
+    <!-- INYECCIÓN DE VARIABLES CORPORATIVAS -->
+    {{ logo_empresa_url|default:"/static/img/logo.png"|json_script:"logo-empresa-url-data" }}
+    {{ nombre_empresa|default:"EMPRESA"|json_script:"nombre-empresa-data" }}
 
     <script id="urls-data" type="application/json">
         {
@@ -286,8 +347,29 @@
                 return res;
             }
 
+            // 'YYYY-MM-DD' como fecha local (new Date('YYYY-MM-DD') la toma en UTC y en México resta un día)
+            let matchIso = token.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (matchIso) {
+                return new Date(parseInt(matchIso[1]), parseInt(matchIso[2]) - 1, parseInt(matchIso[3]));
+            }
+
             let fechaDirecta = new Date(token);
             return isNaN(fechaDirecta.getTime()) ? hoy : fechaDirecta;
+        }
+
+        // Función con Fetch + FileReader para obtener Base64 limpio
+        async function obtenerBase64DesdeUrl(url) {
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error("Error HTTP " + response.status);
+            }
+            const blob = await response.blob();
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+            });
         }
 
         $(function() {
@@ -295,6 +377,11 @@
 
             const reporteId = JSON.parse(document.getElementById('reporte-id-data').textContent);
             const csrfToken = document.getElementById('csrf-token-input').value;
+
+            // Leer variables del DOM
+            let logoEmpresaUrl = JSON.parse(document.getElementById('logo-empresa-url-data')?.textContent || '"/static/img/logo.png"');
+            let nombreEmpresaGlobal = JSON.parse(document.getElementById('nombre-empresa-data')?.textContent || '"EMPRESA"');
+            
             let rawData = JSON.parse(document.getElementById('datos-json-data').textContent);
             const rawConfig = JSON.parse(document.getElementById('config-pivot-data').textContent);
             const plantillasUsuario = JSON.parse(document.getElementById('plantillas-usuario-data').textContent || '[]');
@@ -311,39 +398,149 @@
                 "DataArea": "data"
             };
 
-            let pivotFields = (customFields || []).map(function(f) {
+            // Construye copias nuevas de los campos base (DevExtreme modifica los objetos que recibe)
+            function construirCampos() {
+                return (customFields || []).map(function(f) {
                 let fieldObj = Object.assign({}, f);
 
                 fieldObj.dataField = f.dataField || f.FieldName;
                 fieldObj.caption = f.caption || f.Caption;
 
+                // 🟢 AGREGAR ESTE BLOQUE PARA EL CAMPO MES
+                if (fieldObj.dataField === "Mes") {
+                    const nombresMeses = [
+                        "ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO",
+                        "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"
+                    ];
+                    
+                    fieldObj.customizeText = function(cellInfo) {
+                        let mesNum = parseInt(cellInfo.value, 10);
+                        if (!isNaN(mesNum) && mesNum >= 1 && mesNum <= 12) {
+                            return nombresMeses[mesNum - 1];
+                        }
+                        return cellInfo.valueText;
+                    };
+                }    
+
                 let rawArea = f.area || f.Area;
                 let mappedArea = areaMap[rawArea] || rawArea;
 
+                // Sin área (o visible:false) => queda en "Todos los campos" del Selector de Campos,
+                // disponible para arrastrarlo, igual que los campos ocultos del PivotGrid de Windows.
                 let isOriginallyHidden = (f.visible === false || f.Visible === false);
+                fieldObj.area = isOriginallyHidden ? undefined : (mappedArea || undefined);
+                fieldObj.visible = true;
 
-                if (isOriginallyHidden) {
-                    fieldObj.area = undefined;
-                    fieldObj.visible = true;
-                } else {
-                    fieldObj.area = mappedArea || "filter";
-                    fieldObj.visible = true;
-                    if (fieldObj.area === "data") {
-                        fieldObj.summaryType = f.summaryType || "sum";
-                    }
+                if (fieldObj.area === "data" || f.summaryType) {
+                    fieldObj.summaryType = f.summaryType || "sum";
+                    // Al palomearlo en el Selector de Campos, DevExtreme lo manda a "data" solo si isMeasure;
+                    // si no, lo manda a columnas y crea una columna por cada importe distinto (congela la página).
+                    fieldObj.isMeasure = true;
                 }
 
-                // Asignación directa del formato definido en el JSON de la BD
                 if (f.format) {
                     fieldObj.format = f.format;
                 }
 
-                return fieldObj;
-            });
+                // Campo calculado como cociente de sumas, equivalente al UnboundExpression con
+                // UnboundExpressionMode=UseSummaryValues del PivotGrid de Windows. En el JSON:
+                // {"caption":"% Utilidad","cociente":{"numerador":"Utilidad","denominador":"VentaNeta"},
+                //  "format":{"type":"percent","precision":2}}
+                if (f.cociente) {
+                    var numerador = f.cociente.numerador;
+                    var denominador = f.cociente.denominador;
+                    delete fieldObj.cociente;
+                    delete fieldObj.dataField;
+                    fieldObj.name = f.name || ("cociente_" + numerador + "_" + denominador);
+                    fieldObj.dataType = "number";
+                    fieldObj.isMeasure = true;
+                    fieldObj.summaryType = "custom";
+                    fieldObj.selector = function(fila) {
+                        return { n: Number(fila[numerador]) || 0, d: Number(fila[denominador]) || 0 };
+                    };
+                    fieldObj.calculateCustomSummary = function(opciones) {
+                        if (opciones.summaryProcess === "start") {
+                            opciones.totalValue = { n: 0, d: 0 };
+                        } else if (opciones.summaryProcess === "calculate") {
+                            opciones.totalValue.n += opciones.value.n;
+                            opciones.totalValue.d += opciones.value.d;
+                        } else if (opciones.summaryProcess === "finalize") {
+                            var t = opciones.totalValue;
+                            opciones.totalValue = (t.n === 0 || t.d === 0) ? 0 : t.n / t.d;
+                        }
+                    };
+                }
 
-            var pivotGridDataSource = new DevExpress.data.PivotGridDataSource({
-                fields: pivotFields,
-                store: rawData
+                return fieldObj;
+                });
+            }
+
+            // Campos de fecha: llegan del servidor como texto 'YYYY-MM-DD' y se convierten a Date (hora local)
+            // para que el filtro avanzado pueda comparar fechas (entre, mayor que, etc.).
+            var camposFecha = (customFields || [])
+                .filter(function(f) { return f.dataType === "date"; })
+                .map(function(f) { return f.dataField || f.FieldName; });
+
+            function textoAFecha(valor) {
+                var m = typeof valor === "string" && valor.match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}):(\d{2}))?/);
+                return m ? new Date(+m[1], +m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0)) : valor;
+            }
+
+            function convertirFechas(datos) {
+                if (camposFecha.length) {
+                    datos.forEach(function(fila) {
+                        camposFecha.forEach(function(c) { fila[c] = textoAFecha(fila[c]); });
+                    });
+                }
+                return datos;
+            }
+
+            function crearDataSource(datos) {
+                var ds = new DevExpress.data.PivotGridDataSource({
+                    fields: construirCampos(),
+                    // Solo los campos definidos en configuracion_pivot (no autogenerar uno por columna del SELECT)
+                    retrieveFields: false,
+                    store: convertirFechas(datos),
+                    filter: expresionFiltroAvanzado()
+                });
+                ds.on("changed", actualizarBarraFiltros);
+                return ds;
+            }
+
+            var pivotGridDataSource = crearDataSource(rawData);
+
+            // Altura del pivot = espacio visible debajo de él, para que el Gran Total no quede cortado
+            // (la barra de herramientas y la gráfica ocupan una altura variable arriba del pivot).
+            // DevExtreme mide de menos el panel de filtros (que aquí se acomoda en varios renglones) y su
+            // tabla interna termina más alta que la altura asignada; ese exceso se descuenta.
+            var excesoTablaPivot = 0;
+
+            function calcularAlturaPivot() {
+                var arriba = document.getElementById("pivotgrid").getBoundingClientRect().top;
+                var barra = document.getElementById("barra-filtros");
+                var altoBarra = barra.classList.contains("hidden") ? 0 : barra.offsetHeight + 4;
+                return Math.max(300, Math.floor(window.innerHeight - arriba - 16 - excesoTablaPivot - altoBarra));
+            }
+
+            function ajustarAlturaPivot(component) {
+                (component || pivotGrid).option("height", calcularAlturaPivot());
+            }
+
+            function corregirExcesoAltura(component) {
+                var el = document.getElementById("pivotgrid");
+                var tabla = el.querySelector(".dx-pivotgrid-container > table");
+                if (!tabla) return;
+                var exceso = Math.max(0, Math.round(tabla.getBoundingClientRect().height - el.getBoundingClientRect().height));
+                if (Math.abs(exceso - excesoTablaPivot) > 1) {
+                    excesoTablaPivot = exceso;
+                    ajustarAlturaPivot(component);
+                }
+            }
+
+            var temporizadorAltura;
+            $(window).on("resize", function() {
+                clearTimeout(temporizadorAltura);
+                temporizadorAltura = setTimeout(ajustarAlturaPivot, 200);
             });
 
             var pivotGrid = $("#pivotgrid").dxPivotGrid({
@@ -353,8 +550,24 @@
                 allowExpandAll: true,
 
                 dataFieldArea: "column",
-                height: "calc(100vh - 120px)",
+                height: calcularAlturaPivot(),
                 width: "100%",
+                onContentReady: function(e) {
+                    corregirExcesoAltura(e.component);
+                },
+
+                // Clic derecho sobre un campo: abrir el filtro avanzado con una condición para ese campo
+                onContextMenuPreparing: function(e) {
+                    var dataField = e.field && e.field.dataField;
+                    if (dataField && camposFiltroPorDataField[dataField] && e.area !== "data") {
+                        e.items.push({
+                            text: "Filtro avanzado de \"" + (e.field.caption || dataField) + "\"...",
+                            icon: "filter",
+                            beginGroup: true,
+                            onItemClick: function() { abrirEditorFiltro(dataField); }
+                        });
+                    }
+                },
 
                 loadPanel: {
                     enabled: true,
@@ -386,19 +599,8 @@
                     fileName: "Reporte_PivotGrid"
                 },
 
-                // Manejador centralizado de exportación a Excel
                 onExporting: function(e) {
-                    var workbook = new ExcelJS.Workbook();
-                    var worksheet = workbook.addWorksheet("Reporte Pivot");
-
-                    DevExpress.excelExporter.exportPivotGrid({
-                        component: e.component,
-                        worksheet: worksheet
-                    }).then(function() {
-                        workbook.xlsx.writeBuffer().then(function(buffer) {
-                            saveAs(new Blob([buffer], { type: "application/octet-stream" }), "Reporte_Pivot.xlsx");
-                        });
-                    });
+                    exportarPivotAExcel();
                     e.cancel = true;
                 },
 
@@ -428,13 +630,15 @@
             var dateBoxInicio = $("#fecha-inicio").dxDateBox({
                 type: "date",
                 displayFormat: "dd/MM/yyyy",
-                value: valFechaInicio
+                value: valFechaInicio,
+                width: 125
             }).dxDateBox("instance");
 
             var dateBoxFin = $("#fecha-fin").dxDateBox({
                 type: "date",
                 displayFormat: "dd/MM/yyyy",
-                value: valFechaFin
+                value: valFechaFin,
+                width: 125
             }).dxDateBox("instance");
 
             var comboPlantillas = $("#combo-plantillas").dxSelectBox({
@@ -444,25 +648,412 @@
                 value: plantillasUsuario.length > 0 ? plantillasUsuario[0].id : null,
                 onValueChanged: function(e) {
                     var selectedItem = e.component.option("selectedItem");
+                    actualizarBotonGuardar(selectedItem);
                     if (selectedItem) {
                         if (e.event) {
                             dateBoxInicio.option("value", calcularFechaMacro(selectedItem.fecha_inicio_macro || "-3m"));
                             dateBoxFin.option("value", calcularFechaMacro(selectedItem.fecha_fin_macro || "m"));
                         }
 
-                        if (selectedItem.configuracion_pivot) {
-                            var stateObj = typeof selectedItem.configuracion_pivot === "string" 
-                                ? JSON.parse(selectedItem.configuracion_pivot) 
+                        if (selectedItem.es_default && selectedItem.id === 0) {
+                            // Formato base del reporte: es una lista de campos, no un state() de DevExtreme
+                            establecerFiltroAvanzado(null);
+                            pivotGrid.option("dataSource", crearDataSource(rawData));
+                        } else if (selectedItem.configuracion_pivot) {
+                            var stateObj = typeof selectedItem.configuracion_pivot === "string"
+                                ? JSON.parse(selectedItem.configuracion_pivot)
                                 : selectedItem.configuracion_pivot;
-                            
+
+                            establecerFiltroAvanzado(stateObj.filtroAvanzado);
                             pivotGrid.getDataSource().state(stateObj);
+                            aplicarFiltroAvanzado();
                         }
                     }
                 }
             }).dxSelectBox("instance");
 
+            // El formato base (rep_pivot_dinamico, id 0) no lo puede modificar ningún usuario:
+            // solo se guardan cambios sobre sus plantillas (rep_plantilla_pivot_usuario); para
+            // partir del formato base se usa "Agregar".
+            function esFormatoBase(plantilla) {
+                return !plantilla || plantilla.id === 0;
+            }
+
+            function actualizarBotonGuardar(plantilla) {
+                var base = esFormatoBase(plantilla);
+                $("#btn-guardar-win")
+                    .prop("disabled", base)
+                    .attr("title", base
+                        ? "El formato base no se puede modificar. Use \"Agregar\" para crear su propia plantilla"
+                        : "Guardar cambios en plantilla actual");
+            }
+            actualizarBotonGuardar(comboPlantillas.option("selectedItem"));
+
+            // Los controles de fecha y plantilla cambian la altura de la barra: recalcular la del pivot
+            ajustarAlturaPivot();
+
+            // FILTRO AVANZADO (como "Editar filtro" / "Filtros de texto" del PivotGrid de Windows)
+            // El filtro de encabezado de DevExtreme solo marca/desmarca valores; las condiciones
+            // (contiene, no contiene, comienza por, está vacío...) se aplican como expresión de filtro
+            // sobre los datos con el FilterBuilder de DevExtreme.
+            var filtroAvanzado = null;        // valor del FilterBuilder aplicado
+            var filtroAvanzadoActivo = true;  // casilla de la barra de filtros
+
+            var muestraFila = rawData[0] || {};
+            var camposFiltro = [];
+            var camposFiltroPorDataField = {};
+            (customFields || []).forEach(function(f) {
+                var dataField = f.dataField || f.FieldName;
+                if (!dataField || f.cociente || camposFiltroPorDataField[dataField]) return;
+                var tipo = f.dataType === "date" ? "date" : (typeof muestraFila[dataField] === "number" ? "number" : "string");
+                var campo = { dataField: dataField, caption: f.caption || f.Caption || dataField, dataType: tipo };
+                if (tipo === "date") campo.format = "dd/MM/yyyy";
+                camposFiltro.push(campo);
+                camposFiltroPorDataField[dataField] = campo;
+            });
+            camposFiltro.sort(function(a, b) { return a.caption.localeCompare(b.caption, "es"); });
+
+            var $filterBuilder = $("<div>");
+            var filterBuilder = $filterBuilder.dxFilterBuilder({
+                fields: camposFiltro,
+                value: null,
+                maxGroupLevel: 3,
+                groupOperations: ["and", "or", "notAnd", "notOr"]
+            }).dxFilterBuilder("instance");
+
+            var popupFiltro = $("#popup-filtro").dxPopup({
+                title: "Editar filtro",
+                width: 760,
+                maxWidth: "95vw",
+                height: 440,
+                showCloseButton: true,
+                contentTemplate: function() {
+                    return $("<div>").css({ height: "100%", overflow: "auto" }).append($filterBuilder);
+                },
+                onHiding: function() {
+                    // Si se cerró sin aceptar, el editor vuelve al filtro aplicado
+                    filterBuilder.option("value", filtroAvanzado);
+                },
+                toolbarItems: [
+                    {
+                        widget: "dxButton", toolbar: "bottom", location: "before",
+                        options: { text: "Limpiar", icon: "clear", onClick: function() { filterBuilder.option("value", null); } }
+                    },
+                    {
+                        widget: "dxButton", toolbar: "bottom", location: "after",
+                        options: {
+                            text: "Aceptar", type: "default", stylingMode: "contained",
+                            onClick: function() {
+                                var valor = filterBuilder.option("value");
+                                filtroAvanzado = (Array.isArray(valor) && valor.length) ? valor : null;
+                                filtroAvanzadoActivo = true;
+                                $("#chk-filtro-activo").prop("checked", true);
+                                popupFiltro.hide();
+                                aplicarFiltroAvanzado();
+                            }
+                        }
+                    },
+                    {
+                        widget: "dxButton", toolbar: "bottom", location: "after",
+                        options: { text: "Cancelar", onClick: function() { popupFiltro.hide(); } }
+                    }
+                ]
+            }).dxPopup("instance");
+
+            function expresionFiltroAvanzado() {
+                if (!filtroAvanzado || !filtroAvanzadoActivo || !filterBuilder) return null;
+                return filterBuilder.getFilterExpression() || null;
+            }
+
+            function aplicarFiltroAvanzado() {
+                var ds = pivotGrid.getDataSource();
+                ds.filter(expresionFiltroAvanzado());
+                return ds.reload();
+            }
+
+            function establecerFiltroAvanzado(guardado) {
+                filtroAvanzado = guardado && guardado.valor ? deserializarFiltro(guardado.valor) : null;
+                filtroAvanzadoActivo = !guardado || guardado.activo !== false;
+                $("#chk-filtro-activo").prop("checked", filtroAvanzadoActivo);
+                filterBuilder.option("value", filtroAvanzado);
+            }
+
+            function abrirEditorFiltro(dataField) {
+                var valor = filtroAvanzado;
+                if (dataField) {
+                    var campo = camposFiltroPorDataField[dataField];
+                    var condicion = [dataField, campo && campo.dataType === "string" ? "contains" : "=", ""];
+                    valor = valor ? [valor, "and", condicion] : condicion;
+                }
+                filterBuilder.option("value", valor);
+                popupFiltro.show();
+            }
+
+            // Las fechas del filtro se guardan como 'YYYY-MM-DD' en la plantilla y se reconstruyen como Date
+            function mapearValoresFiltro(expr, fn) {
+                if (!Array.isArray(expr)) return expr;
+                if (typeof expr[0] === "string" && expr[0] !== "!" && camposFiltroPorDataField[expr[0]]) {
+                    var copia = expr.slice();
+                    if (copia.length === 3) {
+                        copia[2] = Array.isArray(copia[2]) ? copia[2].map(function(v) { return fn(expr[0], v); }) : fn(expr[0], copia[2]);
+                    }
+                    return copia;
+                }
+                return expr.map(function(x) { return mapearValoresFiltro(x, fn); });
+            }
+
+            function serializarFiltro(expr) {
+                return mapearValoresFiltro(expr, function(campo, v) {
+                    return v instanceof Date ? DevExpress.localization.formatDate(v, "yyyy-MM-dd") : v;
+                });
+            }
+
+            function deserializarFiltro(expr) {
+                return mapearValoresFiltro(expr, function(campo, v) {
+                    return camposFiltroPorDataField[campo].dataType === "date" ? textoAFecha(v) : v;
+                });
+            }
+
+            // Texto del filtro para la barra inferior: "Etiqueta No contiene DESECHO Y Variedad ..."
+            var textoOperadores = {
+                "=": "Es igual a", "<>": "No es igual a", "<": "Menor que", "<=": "Menor o igual a",
+                ">": "Mayor que", ">=": "Mayor o igual a", "contains": "Contiene", "notcontains": "No contiene",
+                "startswith": "Comienza por", "endswith": "Termina con", "between": "Entre",
+                "anyof": "Es alguno de", "noneof": "No es ninguno de", "isblank": "Está vacío", "isnotblank": "No está vacío"
+            };
+
+            function escaparHtml(texto) {
+                return String(texto).replace(/[&<>"']/g, function(c) {
+                    return { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c];
+                });
+            }
+
+            function textoValorFiltro(v) {
+                if (v instanceof Date) return DevExpress.localization.formatDate(v, "dd/MM/yyyy");
+                if (Array.isArray(v)) return v.map(textoValorFiltro).join(" y ");
+                return v === null || v === undefined || v === "" ? "(vacío)" : String(v);
+            }
+
+            function htmlFiltro(expr, esRaiz) {
+                if (!Array.isArray(expr) || !expr.length) return "";
+                if (expr[0] === "!") {
+                    return '<span class="operador">No</span> (' + htmlFiltro(expr[1], true) + ")";
+                }
+                if (typeof expr[0] === "string") {
+                    var campo = camposFiltroPorDataField[expr[0]];
+                    var html = '<span class="campo">' + escaparHtml(campo ? campo.caption : expr[0]) + "</span> " +
+                               '<span class="operador">' + escaparHtml(textoOperadores[expr[1]] || expr[1]) + "</span>";
+                    if (expr.length > 2) html += ' <span class="valor">' + escaparHtml(textoValorFiltro(expr[2])) + "</span>";
+                    return html;
+                }
+                var partes = expr.map(function(x) {
+                    if (x === "and" || x === "or") return '<span class="union">' + (x === "and" ? "Y" : "O") + "</span>";
+                    return htmlFiltro(x, false);
+                });
+                var texto = partes.join(" ");
+                return esRaiz ? texto : "(" + texto + ")";
+            }
+
+            function textoValoresEncabezado(valores) {
+                var textos = valores.map(function(v) { return Array.isArray(v) ? v.join(" / ") : textoValorFiltro(v); });
+                return textos.length > 6 ? textos.slice(0, 6).join(", ") + " y " + (textos.length - 6) + " más" : textos.join(", ");
+            }
+
+            function actualizarBarraFiltros() {
+                if (!pivotGrid || !filterBuilder) return;
+                var ds = pivotGrid.getDataSource();
+                var $texto = $("#texto-filtros").empty();
+                var hayFiltros = false;
+
+                if (filtroAvanzado) {
+                    hayFiltros = true;
+                    $texto.append($('<span class="chip-filtro">').html(htmlFiltro(filtroAvanzado, true)));
+                }
+
+                // Filtros por valores (embudo de cada campo)
+                ds.fields().forEach(function(f) {
+                    if (!f.filterValues || !f.filterValues.length) return;
+                    hayFiltros = true;
+                    var $chip = $('<span class="chip-filtro">').html(
+                        '<span class="campo">' + escaparHtml(f.caption || f.dataField) + "</span> " +
+                        '<span class="operador">' + (f.filterType === "exclude" ? "No es" : "Es") + "</span> " +
+                        '<span class="valor">' + escaparHtml(textoValoresEncabezado(f.filterValues)) + "</span>"
+                    );
+                    $("<button type=\"button\" title=\"Quitar este filtro\">&times;</button>").on("click", function() {
+                        ds.field(f.index, { filterValues: null });
+                        ds.load();
+                    }).appendTo($chip);
+                    $texto.append($chip);
+                });
+
+                var $barra = $("#barra-filtros");
+                var altoAntes = $barra.hasClass("hidden") ? 0 : $barra.outerHeight();
+                $barra.toggleClass("hidden", !hayFiltros).toggleClass("flex", hayFiltros)
+                      .toggleClass("filtro-inactivo", !!filtroAvanzado && !filtroAvanzadoActivo);
+                $("#chk-filtro-activo").toggle(!!filtroAvanzado);
+                var altoDespues = $barra.hasClass("hidden") ? 0 : $barra.outerHeight();
+                if (altoAntes !== altoDespues) ajustarAlturaPivot();
+            }
+
+            $("#btn-filtro-win, #btn-editar-filtro").on("click", function() { abrirEditorFiltro(); });
+
+            $("#chk-filtro-activo").on("change", function() {
+                filtroAvanzadoActivo = this.checked;
+                aplicarFiltroAvanzado();
+            });
+
+            $("#btn-quitar-filtros").on("click", function() {
+                var ds = pivotGrid.getDataSource();
+                filtroAvanzado = null;
+                filterBuilder.option("value", null);
+                ds.fields().forEach(function(f) {
+                    if (f.filterValues && f.filterValues.length) ds.field(f.index, { filterValues: null });
+                });
+                ds.filter(null);
+                ds.reload();
+            });
+
+            actualizarBarraFiltros();
+
+            // Función para exportar a Excel con encabezado corporativo (Logo, Nombre Empresa, Título y Fechas)
+            async function exportarPivotAExcel() {
+                var workbook = new ExcelJS.Workbook();
+                var worksheet = workbook.addWorksheet("Reporte Pivot");
+
+                // Mapeo dinámico de formatos
+                var fields = pivotGrid.getDataSource().fields();
+                var fieldFormats = {};
+                fields.forEach(function(f) {
+                    if (f.dataField) {
+                        fieldFormats[f.dataField] = f.format;
+                    }
+                });
+
+                // 1. EXPORTAMOS EL PIVOTGRID AL WORKSHEET
+                DevExpress.excelExporter.exportPivotGrid({
+                    component: pivotGrid,
+                    worksheet: worksheet,
+                    customizeCell: function(options) {
+                        var pivotCell = options.pivotCell;
+                        var excelCell = options.excelCell;
+
+                        if (pivotCell && pivotCell.area === "data") {
+                            var dataField = pivotCell.dataField;
+                            var fieldFormat = dataField ? (dataField.format || fieldFormats[dataField.dataField]) : null;
+                            var cellText = pivotCell.text || "";
+
+                            if (cellText.indexOf("%") !== -1) {
+                                excelCell.numFmt = '0.00%';
+                            } else if (fieldFormat === "currency" || cellText.indexOf("$") !== -1) {
+                                excelCell.numFmt = '"$"#,##0.00;("$"#,##0.00);"-"';
+                            } else if (typeof pivotCell.value === "number") {
+                                excelCell.numFmt = '#,##0.00;(#,##0.00);"-"';
+                            }
+                        }
+                    }
+                }).then(async function() {
+                    // 2. DESPLAZAMOS 4 FILAS
+                    worksheet.spliceRows(1, 0, [], [], [], []);
+
+                    // Ajustar alto de las filas del encabezado
+                    worksheet.getRow(1).height = 20;
+                    worksheet.getRow(2).height = 22;
+                    worksheet.getRow(3).height = 18;
+
+                    // 3. RANGO DE FECHAS
+                    var fInicioVal = dateBoxInicio.option("value");
+                    var fFinVal = dateBoxFin.option("value");
+                    var strInicio = fInicioVal ? DevExpress.localization.formatDate(fInicioVal, "dd/MM/yyyy") : "";
+                    var strFin = fFinVal ? DevExpress.localization.formatDate(fFinVal, "dd/MM/yyyy") : "";
+                    var textoRangoFechas = "Período: Del " + strInicio + " al " + strFin;
+
+                    // 4. TEXTOS DE ENCABEZADO
+                    worksheet.getCell("C1").value = nombreEmpresaGlobal.toUpperCase();
+                    worksheet.getCell("C1").font = { name: "Calibri", size: 11, bold: true, color: { argb: "1E293B" } };
+
+                    worksheet.getCell("C2").value = "{{ titulo_reporte|escapejs }}".toUpperCase();
+                    worksheet.getCell("C2").font = { name: "Calibri", size: 14, bold: true, color: { argb: "0F172A" } };
+
+                    worksheet.getCell("C3").value = textoRangoFechas;
+                    worksheet.getCell("C3").font = { name: "Calibri", size: 11, italic: true, color: { argb: "475569" } };
+
+                     // 🟢 RELLENO BLANCO PARA OCULTAR LAS LÍNEAS DE CUADRÍCULA DETRÁS DEL LOGO
+                    const celdasFondoLogo = ["A1", "A2", "A3", "B1", "B2", "B3"];
+                    celdasFondoLogo.forEach(coordenada => {
+                        worksheet.getCell(coordenada).fill = {
+                            type: 'pattern',
+                            pattern: 'solid',
+                            fgColor: { argb: 'FFFFFF' }
+                        };
+                    });   
+
+                    // 5. INSERCIÓN DE LOGO CON DIMENSIONES EN PÍXELES (ANCLAJE EXACTO)
+                    var logoUrl = logoEmpresaUrl;
+                    if (logoUrl) {
+                        try {
+                            if (!logoUrl.startsWith("http://") && !logoUrl.startsWith("https://")) {
+                                logoUrl = window.location.origin + logoUrl;
+                            }
+
+                            var base64Image = await obtenerBase64DesdeUrl(logoUrl);
+
+                            var ext = 'png';
+                            if (logoUrl.toLowerCase().endsWith('.jpg') || logoUrl.toLowerCase().endsWith('.jpeg')) {
+                                ext = 'jpeg';
+                            }
+
+                            var imageId = workbook.addImage({
+                                base64: base64Image,
+                                extension: ext,
+                            });
+
+                            // Anclaje por coordenadas exactas [columna, fila] + tamaño en píxeles
+                            worksheet.addImage(imageId, {
+                                tl: { col: 0.1, row: 0.1 },
+                                ext: { width: 130, height: 50 }
+                            });
+                        } catch (e) {
+                            console.warn("No se pudo procesar el logotipo para Excel:", e);
+                        }
+                    }
+
+                    // 6. FORMATO DE TABLA (FILAS >= 5)
+                    worksheet.eachRow(function(row, rowNumber) {
+                        if (rowNumber >= 5) {
+                            row.eachCell(function(cell) {
+                                cell.font = { name: 'Calibri', size: 10, bold: false, color: { argb: '000000' } };
+                            });
+                        }
+                    });
+
+                    // 7. DESCARGA
+                    var buffer = await workbook.xlsx.writeBuffer();
+                    var tituloGuardar = "{{ titulo_reporte|escapejs }}".replace(/[^a-zA-Z0-9_-]/g, "_");
+                    saveAs(new Blob([buffer], { type: "application/octet-stream" }), tituloGuardar + ".xlsx");
+                }).catch(function(err) {
+                    console.error("Error al exportar a Excel:", err);
+                });
+            }
+
+            // Evento exportar
+            $("#btn-exportar-win").off("click").on("click", function() {
+                exportarPivotAExcel();
+            });
+
             // 1. EVENTO ACTUALIZAR (AJAX)
-            $("#btn-actualizar-win").on("click", function() {
+            var $btnActualizar = $("#btn-actualizar-win");
+            var panelCarga = $("#panel-carga").dxLoadPanel({
+                shading: true,
+                shadingColor: "rgba(15, 23, 42, 0.15)",
+                showIndicator: true,
+                showPane: true,
+                hideOnOutsideClick: false,
+                width: 300,
+                height: 100,
+                position: { of: "#pivotgrid" }
+            }).dxLoadPanel("instance");
+
+            $btnActualizar.on("click", function() {
                 var fInicio = dateBoxInicio.option("value");
                 var fFin = dateBoxFin.option("value");
 
@@ -474,7 +1065,10 @@
                 var formatInicio = DevExpress.localization.formatDate(fInicio, "yyyy-MM-dd");
                 var formatFin = DevExpress.localization.formatDate(fFin, "yyyy-MM-dd");
 
-                DevExpress.ui.notify("Consultando datos del servidor...", "info", 1500);
+                // El panel de espera se queda hasta que el pivot termina de pintar los datos nuevos
+                panelCarga.option("message", "Consultando datos del servidor...");
+                panelCarga.show();
+                $btnActualizar.prop("disabled", true).addClass("opacity-50 cursor-wait");
 
                 var ajaxUrl = window.location.pathname + "?fecha_inicio=" + formatInicio + "&fecha_fin=" + formatFin + "&format=json";
 
@@ -487,43 +1081,43 @@
                 })
                 .then(function(response) {
                     if (response.status === "success") {
+                        if (response.logo_empresa_url) logoEmpresaUrl = response.logo_empresa_url;
+                        if (response.nombre_empresa) nombreEmpresaGlobal = response.nombre_empresa;
+                        
                         var currentState = pivotGrid.getDataSource().state();
-                        var nuevoDataSource = new DevExpress.data.PivotGridDataSource({
-                            fields: pivotFields,
-                            store: response.datos || []
-                        });
+                        rawData = response.datos || [];
+                        panelCarga.option("message", "Procesando " + rawData.length.toLocaleString("es-MX") + " registros...");
 
-                        pivotGrid.option("dataSource", nuevoDataSource);
+                        // Se aplica en el siguiente ciclo para que el navegador alcance a pintar el mensaje
+                        setTimeout(function() {
+                            pivotGrid.on("contentReady", function alTerminar() {
+                                pivotGrid.off("contentReady", alTerminar);
+                                terminarActualizacion();
+                                DevExpress.ui.notify("Datos actualizados (" + rawData.length + " registros)", "success", 3000);
+                            });
 
-                        if (currentState) {
-                            pivotGrid.getDataSource().state(currentState);
-                        }
+                            pivotGrid.option("dataSource", crearDataSource(rawData));
 
-                        DevExpress.ui.notify("Datos actualizados (" + (response.datos ? response.datos.length : 0) + " registros)", "success", 3000);
+                            if (currentState) {
+                                pivotGrid.getDataSource().state(currentState);
+                            }
+                        }, 30);
                     } else {
+                        terminarActualizacion();
                         DevExpress.ui.notify("No se pudieron obtener los datos", "error", 3000);
                     }
                 })
                 .catch(function(err) {
+                    terminarActualizacion();
                     console.error("Error al actualizar:", err);
                     DevExpress.ui.notify("Error: " + err.message, "error", 4000);
                 });
             });
 
-            // 2. EVENTO EXPORTAR A EXCEL
-            $("#btn-exportar-win").on("click", function() {
-                var workbook = new ExcelJS.Workbook();
-                var worksheet = workbook.addWorksheet("Reporte Pivot");
-
-                DevExpress.excelExporter.exportPivotGrid({
-                    component: pivotGrid,
-                    worksheet: worksheet
-                }).then(function() {
-                    workbook.xlsx.writeBuffer().then(function(buffer) {
-                        saveAs(new Blob([buffer], { type: "application/octet-stream" }), "Reporte_Pivot.xlsx");
-                    });
-                });
-            });
+            function terminarActualizacion() {
+                panelCarga.hide();
+                $btnActualizar.prop("disabled", false).removeClass("opacity-50 cursor-wait");
+            }
 
             // 3. EVENTO MOSTRAR/OCULTAR SUBTOTALES
             $("#btn-subtotales-win").on("click", function() {
@@ -531,7 +1125,6 @@
                 pivotGrid.option("showRowTotals", showSubtotals);
                 pivotGrid.option("showColumnTotals", showSubtotals);
                 
-                // Resalta el botón cuando los subtotales están activos
                 $(this).toggleClass("bg-amber-100 border-amber-400", showSubtotals);
             });
 
@@ -548,31 +1141,49 @@
                 adaptiveLayout: { width: 450 }
             }).dxChart("instance");
 
-            pivotGrid.bindChart(chart, {
-                dataFieldsDisplayMode: "singleAxis",
-                behavior: "filterable"
-            });
+            // La gráfica solo se liga al pivot mientras está visible: ligada y oculta
+            // se recalculaba en cada cambio de campos (unas 4 veces más lento).
+            var desligarChart = null;
 
             $("#btn-chart-win").on("click", function() {
                 var $chartContainer = $("#chart-container");
                 if ($chartContainer.hasClass("hidden")) {
                     $chartContainer.removeClass("hidden");
                     $(this).addClass("bg-purple-100 border-purple-400");
+                    desligarChart = pivotGrid.bindChart(chart, {
+                        dataFieldsDisplayMode: "singleAxis",
+                        behavior: "filterable"
+                    });
                     chart.render();
+                    ajustarAlturaPivot();
                 } else {
                     $chartContainer.addClass("hidden");
                     $(this).removeClass("bg-purple-100 border-purple-400");
+                    if (desligarChart) {
+                        desligarChart();
+                        desligarChart = null;
+                    }
+                    ajustarAlturaPivot();
                 }
             });
 
-            // 5. EVENTOS GUARDAR Y NUEVA PLANTILLA (AGREGAR)
+            // 5. EVENTOS GUARDAR Y NUEVA PLANTILLA
+            function obtenerMacroOFecha(fecha, macro) {
+                var fechaStr = DevExpress.localization.formatDate(fecha, "yyyy-MM-dd");
+                var macroStr = DevExpress.localization.formatDate(calcularFechaMacro(macro), "yyyy-MM-dd");
+                return fechaStr === macroStr ? macro : fechaStr;
+            }
+
             function enviarPlantillaServidor(nombre) {
                 var currentState = pivotGrid.getDataSource().state();
                 var fInicio = dateBoxInicio.option("value");
                 var fFin = dateBoxFin.option("value");
                 
-                var macroInicioStr = DevExpress.localization.formatDate(fInicio, "yyyy-MM-dd");
-                var macroFinStr = DevExpress.localization.formatDate(fFin, "yyyy-MM-dd");
+                // Si las fechas son las que genera la macro de la plantilla actual, se guarda la macro
+                // (ej. -3m / m) para que la plantilla siga siendo relativa; si el usuario las cambió, se guarda la fecha fija.
+                var plantillaSel = comboPlantillas.option("selectedItem") || {};
+                var macroInicioStr = obtenerMacroOFecha(fInicio, plantillaSel.fecha_inicio_macro || "-3m");
+                var macroFinStr = obtenerMacroOFecha(fFin, plantillaSel.fecha_fin_macro || "m");
 
                 DevExpress.ui.notify("Guardando plantilla...", "info", 1500);
 
@@ -585,7 +1196,12 @@
                     body: JSON.stringify({
                         reporte_id: reporteId,
                         nombre_plantilla: nombre,
-                        configuracion_pivot: currentState,
+                        configuracion_pivot: Object.assign({}, currentState, {
+                            // El filtro avanzado no forma parte del state() de DevExtreme: se guarda aparte
+                            filtroAvanzado: filtroAvanzado
+                                ? { valor: serializarFiltro(filtroAvanzado), activo: filtroAvanzadoActivo }
+                                : null
+                        }),
                         fecha_inicio_macro: macroInicioStr,
                         fecha_fin_macro: macroFinStr
                     })
@@ -610,14 +1226,9 @@
 
             $("#btn-guardar-win").on("click", function() {
                 var plantillaActual = comboPlantillas.option("selectedItem");
-                var nombre = plantillaActual ? plantillaActual.nombre_plantilla : "Mi Plantilla";
+                if (esFormatoBase(plantillaActual)) return;
 
-                if (!plantillaActual || plantillaActual.es_default) {
-                    nombre = prompt("Ingrese el nombre para guardar la plantilla:", "Mi Vista Personalizada");
-                    if (!nombre || nombre.trim() === "") return;
-                }
-
-                enviarPlantillaServidor(nombre.trim());
+                enviarPlantillaServidor(plantillaActual.nombre_plantilla.trim());
             });
 
             $("#btn-nueva-win").on("click", function() {

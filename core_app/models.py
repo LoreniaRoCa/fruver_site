@@ -16,7 +16,6 @@ class ModuloSistema(models.Model):
     def __str__(self):
         return self.nombre
 
-
 class OpcionModulo(models.Model):
     modulo = models.ForeignKey(
         ModuloSistema, 
@@ -25,6 +24,7 @@ class OpcionModulo(models.Model):
         verbose_name="Módulo Perteneciente"
     )
     titulo = models.CharField(max_length=100, verbose_name="Título del Menú") # Ej: "Empleados", "Mi Panel de Evaluación"
+    grupo = models.CharField(max_length=100, default='General', blank=True, null=True)
     link = models.CharField(max_length=255, verbose_name="Ruta / Enlace (URL)") # Ej: "/admin/rh/empleado/"
     icono = models.CharField(max_length=50, default="link", verbose_name="Icono (Material Icon)") # Ej: "people", "badge"
     orden = models.IntegerField(default=1, verbose_name="Orden en el Menú")

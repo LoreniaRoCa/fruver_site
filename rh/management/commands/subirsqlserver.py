@@ -6,7 +6,7 @@ import pyodbc
 from dotenv import load_dotenv
 from supabase import create_client, Client
 from django.core.management.base import BaseCommand
-from django.db import connection  # 🌟 Permite ejecutar TRUNCATE instantáneo
+from django.db import connection  # Permite ejecutar sentencias SQL directas en Supabase
 
 
 # 1. Localizar y cargar el .env
@@ -53,6 +53,11 @@ class Command(BaseCommand):
             conn = pyodbc.connect(SQL_CONN_STR)
             cursor = conn.cursor()
 
+            # Declaración de variables para el limpiado específico por fechas
+            f_ini_str = None
+            f_fin_str = None
+            campo_fecha = None  # Nombre de la columna de fecha en la tabla de Supabase
+
             # LÓGICA SEGÚN EL PARÁMETRO SELECCIONADO
             if opcion_tabla == 1:
                 self.stdout.write("🟡 [Opción 1] Ejecutando sp_frupa_inventario...")
@@ -64,10 +69,20 @@ class Command(BaseCommand):
                     "exec sp_frupa_inventario @FechaIni, @FechaFin"
                 )
                 tabla_destino = "rep_eye_inventario"
+                # Si la opción 1 requiere limpiar toda la tabla, se mantendrá sin rango de fechas
 
             elif opcion_tabla == 2:
-                self.stdout.write("🟡 [Opción 2] Consultando tabla FruDetalleVentas...")
-                query = "exec AgroSmart_FRUSA.dbo.sp_fru_ventas_pivot '20130101', '20261231', 1"
+                # 🟢 DEFINICIÓN DEL RANGO DE FECHAS
+                f_ini_str = "2026-01-01"
+                f_fin_str = "2026-12-31"
+                campo_fecha = "FechaFac"  # ⚠️ Ajusta al nombre exacto de la columna de fecha en Supabase (ej. 'fecha', 'd_fecha', etc.)
+
+                # Formato YYYYMMDD para el Stored Procedure de SQL Server
+                f_ini_sql = f_ini_str.replace("-", "")
+                f_fin_sql = f_fin_str.replace("-", "")
+
+                self.stdout.write(f"🟡 [Opción 2] Consultando tabla FruDetalleVentas ({f_ini_str} al {f_fin_str})...")
+                query = f"exec AgroSmart_FRUSA.dbo.sp_fru_ventas_pivot '{f_ini_sql}', '{f_fin_sql}', 1"
                 tabla_destino = "rep_detalleventas"
 
             else:
@@ -95,11 +110,15 @@ class Command(BaseCommand):
             ]
             conn.close()
 
-            # ⚡ VACIADO INSTANTÁNEO CON TRUNCATE (Evita el timeout de PostgREST)
-            self.stdout.write(f"🟡 Limpiando datos anteriores en Supabase ({tabla_destino}) mediante TRUNCATE...")
+            # 🟢 LIMPIADO SELECTIVO EN SUPABASE
             with connection.cursor() as db_cursor:
-                # Se utiliza comilla doble para respetar mayúsculas/minúsculas exactas
-                db_cursor.execute(f'TRUNCATE TABLE public."{tabla_destino}" RESTART IDENTITY;')
+                if f_ini_str and f_fin_str and campo_fecha:
+                    self.stdout.write(f"🟡 Eliminando datos anteriores en Supabase ({tabla_destino}) entre {f_ini_str} y {f_fin_str}...")
+                    delete_sql = f'DELETE FROM public."{tabla_destino}" WHERE "{campo_fecha}"::date BETWEEN %s AND %s;'
+                    db_cursor.execute(delete_sql, [f_ini_str, f_fin_str])
+                else:
+                    self.stdout.write(f"🟡 Limpiando toda la tabla en Supabase ({tabla_destino}) mediante TRUNCATE...")
+                    db_cursor.execute(f'TRUNCATE TABLE public."{tabla_destino}" RESTART IDENTITY;')
 
             # Conexión e inserción masiva en Supabase
             supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
