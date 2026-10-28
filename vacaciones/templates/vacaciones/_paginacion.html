@@ -1,0 +1,9 @@
+{% if pagina.paginator.num_pages > 1 %}
+<div class="vac-paginacion">
+    <span>Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+    <div class="vac-acciones">
+        {% if pagina.has_previous %}<a class="vac-btn vac-btn-chico" href="?{% if parametros %}{{ parametros }}&{% endif %}page={{ pagina.previous_page_number }}">Anterior</a>{% endif %}
+        {% if pagina.has_next %}<a class="vac-btn vac-btn-chico" href="?{% if parametros %}{{ parametros }}&{% endif %}page={{ pagina.next_page_number }}">Siguiente</a>{% endif %}
+    </div>
+</div>
+{% endif %}

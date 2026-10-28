@@ -11,7 +11,7 @@ class NavegacionDinamicaMiddleware:
         modulo_slug = None
 
         # Detectar el módulo activo por la URL
-        if any(k in path for k in ['/admin/rh/', 'evaluacion', 'empleado', 'puesto', 'departamento', 'competencia', 'resumen', 'panel']):
+        if any(k in path for k in ['/admin/rh/', '/admin/vacaciones/', 'evaluacion', 'empleado', 'puesto', 'departamento', 'competencia', 'resumen', 'panel']):
             modulo_slug = 'rh'
         elif any(k in path for k in ['/inventario/', '/reportes/', 'pivot']):
             modulo_slug = 'reportes'

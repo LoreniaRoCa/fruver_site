@@ -65,6 +65,7 @@ INSTALLED_APPS = [
     
     'rh.apps.RhConfig',
     'reportes.apps.ReportesConfig',
+    'vacaciones.apps.VacacionesConfig',
     'core_app.apps.CoreAppConfig',  # 🟢 Opción 1 (Recomendada)
 ]
 

@@ -1,0 +1,120 @@
+{% extends 'vacaciones/base.html' %}
+{% load vacaciones_extras %}
+{% block title %}Solicitar vacaciones{% endblock %}
+{% block vac_contenido %}
+<div class="vac-encabezado">
+    <div>
+        <h1>Solicitar vacaciones</h1>
+        <p>Domingo y días inhábiles no se descuentan. Si la fecha de inicio es muy próxima o ya pasó, se registra como caso extraordinario.</p>
+    </div>
+    <div class="vac-acciones">
+        <a class="vac-btn" href="{% url 'vacaciones:mis_vacaciones' %}"><span class="material-symbols-outlined">arrow_back</span>Mis vacaciones</a>
+    </div>
+</div>
+
+<div style="display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:20px" class="vac-solicitar">
+    <form method="post" class="vac-panel" id="form-solicitud">
+        {% csrf_token %}
+        <h2>Periodo</h2>
+        <div class="cuerpo" style="display:flex;flex-direction:column;gap:16px">
+            {% if es_rh %}
+            <div class="vac-campo">
+                <label for="empleado">Persona</label>
+                <select name="empleado" id="empleado">
+                    {% if not yo %}<option value="">— Selecciona —</option>{% endif %}
+                    {% for e in empleados %}
+                    <option value="{{ e.pk }}" {% if datos.empleado == e.pk|stringformat:"s" %}selected{% endif %}>
+                        {{ e.nombre_largo }} (#{{ e.id_empleado }}){% if yo and e.pk == yo.pk %} — yo{% endif %}</option>
+                    {% endfor %}
+                </select>
+                <span class="sub" id="aviso-captura" style="color:var(--vac-suave);font-size:12px">
+                    Si eliges a otra persona, el formato queda autorizado por RH al guardarlo.</span>
+            </div>
+            {% endif %}
+            <div class="vac-rejilla">
+                <div class="vac-campo">
+                    <label for="fecha_inicio">Fecha de inicio</label>
+                    <input type="date" name="fecha_inicio" id="fecha_inicio" value="{{ datos.fecha_inicio }}" required>
+                </div>
+                <div class="vac-campo">
+                    <label for="fecha_fin">Fecha de término</label>
+                    <input type="date" name="fecha_fin" id="fecha_fin" value="{{ datos.fecha_fin }}" required>
+                </div>
+            </div>
+            <div class="vac-campo">
+                <label for="motivo">Motivo / observaciones (opcional)</label>
+                <textarea name="motivo" id="motivo" maxlength="500">{{ datos.motivo }}</textarea>
+            </div>
+            <div class="vac-acciones" style="justify-content:flex-end">
+                <button type="submit" class="vac-btn vac-btn-primario" id="btn-enviar">
+                    <span class="material-symbols-outlined">send</span><span id="btn-enviar-texto">Enviar solicitud</span></button>
+            </div>
+        </div>
+    </form>
+
+    <div class="vac-panel" style="align-self:start">
+        <h2>Resumen</h2>
+        <div class="cuerpo" id="resumen" style="display:flex;flex-direction:column;gap:12px">
+            <div class="vac-tarjeta destacada" style="padding:12px">
+                <div class="etiqueta">Días disponibles</div>
+                <div class="valor" id="r-disponibles">{% if saldo %}{{ saldo.disponibles|dias }}{% else %}—{% endif %}</div>
+            </div>
+            <div id="r-detalle" style="display:none;flex-direction:column;gap:8px">
+                <div><span class="sub" style="color:var(--vac-suave)">Días a disfrutar:</span> <strong id="r-dias"></strong></div>
+                <div><span class="sub" style="color:var(--vac-suave)">Quedarían:</span> <strong id="r-quedan"></strong></div>
+                <div><span class="sub" style="color:var(--vac-suave)">Se descuenta de:</span> <strong id="r-cargo"></strong></div>
+                <div><span class="sub" style="color:var(--vac-suave)">Se presenta a trabajar:</span> <strong id="r-regreso"></strong></div>
+                <div id="r-extra" class="vac-mensaje warning" style="display:none;margin:0">Caso extraordinario: se solicita con menos anticipación de la indicada en la política.</div>
+            </div>
+            <div id="r-error" class="vac-mensaje error" style="display:none;margin:0"></div>
+        </div>
+    </div>
+</div>
+<style>@media (max-width: 900px) { .vac-solicitar { grid-template-columns: minmax(0,1fr) !important; } }</style>
+
+<script>
+(function () {
+    var urlCalcular = "{% url 'vacaciones:calcular' %}";
+    var yoId = "{{ yo.pk|default:'' }}";
+    var $ = function (id) { return document.getElementById(id); };
+    var dias = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
+    var meses = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+    function fechaLarga(iso) {
+        var p = iso.split("-").map(Number), d = new Date(p[0], p[1] - 1, p[2]);
+        return dias[d.getDay()] + " " + d.getDate() + " de " + meses[d.getMonth()] + " " + d.getFullYear();
+    }
+    var peticion = 0;
+    function calcular() {
+        var params = new URLSearchParams({ inicio: $("fecha_inicio").value, fin: $("fecha_fin").value });
+        var sel = $("empleado");
+        if (sel) {
+            params.set("empleado", sel.value);
+            var otraPersona = sel.value && sel.value !== yoId;
+            $("btn-enviar-texto").textContent = otraPersona ? "Generar formato autorizado" : "Enviar solicitud";
+        }
+        if ($("fecha_inicio").value && !$("fecha_fin").value) $("fecha_fin").value = $("fecha_inicio").value;
+        $("fecha_fin").min = $("fecha_inicio").value;
+        var n = ++peticion;
+        fetch(urlCalcular + "?" + params.toString(), { headers: { "X-Requested-With": "XMLHttpRequest" } })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (n !== peticion) return;
+                $("r-disponibles").textContent = d.disponibles !== undefined ? d.disponibles : "—";
+                $("r-error").style.display = d.error ? "" : "none";
+                $("r-error").textContent = d.error || "";
+                $("btn-enviar").disabled = Boolean(d.error);
+                $("btn-enviar").style.opacity = d.error ? 0.5 : 1;
+                if (!d.dias) { $("r-detalle").style.display = "none"; return; }
+                $("r-detalle").style.display = "flex";
+                $("r-dias").textContent = d.dias;
+                $("r-quedan").textContent = d.quedan;
+                $("r-cargo").textContent = d.cargo.map(function (c) { return c.dias + " del periodo " + c.anio; }).join(", ") || "—";
+                $("r-regreso").textContent = fechaLarga(d.regreso);
+                $("r-extra").style.display = d.extraordinaria ? "" : "none";
+            });
+    }
+    ["fecha_inicio", "fecha_fin", "empleado"].forEach(function (id) { if ($(id)) $(id).addEventListener("change", calcular); });
+    calcular();
+})();
+</script>
+{% endblock %}

@@ -274,7 +274,7 @@
         <div id="pivotgrid" class="w-full shadow-sm rounded-lg"></div>
 
         <!-- Barra de filtros activos (como el panel de filtro del PivotGrid de Windows) -->
-        <div id="barra-filtros" class="hidden mt-1 px-2 py-1.5 bg-white rounded-lg border border-gray-200 shadow-sm flex items-center gap-2 text-xs">
+        <div id="barra-filtros" class="mt-1 px-2 py-1.5 bg-white rounded-lg border border-gray-200 shadow-sm flex items-center gap-2 text-xs">
             <button type="button" id="btn-quitar-filtros" class="text-red-600 font-bold px-1 hover:bg-red-50 rounded" title="Quitar todos los filtros">&times;</button>
             <input type="checkbox" id="chk-filtro-activo" checked title="Activar o desactivar el filtro avanzado">
             <div id="texto-filtros" class="flex-1 flex flex-wrap items-center gap-1 min-w-0"></div>
@@ -389,7 +389,11 @@
             const fechaInicioActualStr = JSON.parse(document.getElementById('fecha-inicio-actual-data')?.textContent || '""');
             const fechaFinActualStr = JSON.parse(document.getElementById('fecha-fin-actual-data')?.textContent || '""');
 
-            let customFields = Array.isArray(rawConfig) ? rawConfig : (rawConfig ? rawConfig.Fields : null);
+            // El formato base (rep_pivot_dinamico.configuracion_pivot) puede ser:
+            //   - una lista de campos: [{dataField, caption, area, format...}, ...]
+            //   - o un objeto con la lista y el filtro avanzado: {"fields": [...], "filtroAvanzado": {...}}
+            const configBase = Array.isArray(rawConfig) ? { fields: rawConfig } : (rawConfig || {});
+            let customFields = configBase.fields || configBase.Fields || null;
 
             let areaMap = {
                 "FilterArea": "filter",
@@ -495,9 +499,9 @@
                 return datos;
             }
 
-            function crearDataSource(datos) {
+            function crearDataSource(datos, campos) {
                 var ds = new DevExpress.data.PivotGridDataSource({
-                    fields: construirCampos(),
+                    fields: campos || construirCampos(),
                     // Solo los campos definidos en configuracion_pivot (no autogenerar uno por columna del SELECT)
                     retrieveFields: false,
                     store: convertirFechas(datos),
@@ -655,22 +659,62 @@
                             dateBoxFin.option("value", calcularFechaMacro(selectedItem.fecha_fin_macro || "m"));
                         }
 
-                        if (selectedItem.es_default && selectedItem.id === 0) {
-                            // Formato base del reporte: es una lista de campos, no un state() de DevExtreme
-                            establecerFiltroAvanzado(null);
-                            pivotGrid.option("dataSource", crearDataSource(rawData));
-                        } else if (selectedItem.configuracion_pivot) {
-                            var stateObj = typeof selectedItem.configuracion_pivot === "string"
-                                ? JSON.parse(selectedItem.configuracion_pivot)
-                                : selectedItem.configuracion_pivot;
-
-                            establecerFiltroAvanzado(stateObj.filtroAvanzado);
-                            pivotGrid.getDataSource().state(stateObj);
-                            aplicarFiltroAvanzado();
-                        }
+                        aplicarPlantilla(selectedItem);
                     }
                 }
             }).dxSelectBox("instance");
+
+            // Propiedades de acomodo que una plantilla puede cambiar sobre los campos del formato base
+            var PROPIEDADES_ACOMODO = ["area", "areaIndex", "sortOrder", "sortBy", "sortBySummaryField", "sortBySummaryPath",
+                                       "expanded", "filterValues", "filterType", "summaryType", "summaryDisplayMode", "width"];
+
+            // Aplica a los campos del formato base el acomodo guardado en una plantilla. Se empata por
+            // dataField (o name en campos calculados), así la plantilla no depende del orden de los campos.
+            // Los campos que la plantilla no menciona quedan en el Selector de Campos.
+            function camposConAcomodo(camposPlantilla) {
+                var porClave = {};
+                (camposPlantilla || []).forEach(function(c) {
+                    var clave = c.dataField || c.name;
+                    if (clave && !porClave[clave]) porClave[clave] = c;
+                });
+                return construirCampos().map(function(campo) {
+                    var guardado = porClave[campo.dataField || campo.name];
+                    if (!guardado) {
+                        campo.area = undefined;
+                        return campo;
+                    }
+                    PROPIEDADES_ACOMODO.forEach(function(p) {
+                        if (guardado.hasOwnProperty(p)) campo[p] = guardado[p];
+                    });
+                    if (campo.area === "data") campo.isMeasure = true;
+                    return campo;
+                });
+            }
+
+            function aplicarPlantilla(plantilla) {
+                if (plantilla.es_default && plantilla.id === 0) {
+                    // Formato base del reporte
+                    establecerFiltroAvanzado(configBase.filtroAvanzado || null);
+                    pivotGrid.option("dataSource", crearDataSource(rawData));
+                    return;
+                }
+                if (!plantilla.configuracion_pivot) return;
+                var estado = typeof plantilla.configuracion_pivot === "string"
+                    ? JSON.parse(plantilla.configuracion_pivot)
+                    : plantilla.configuracion_pivot;
+
+                establecerFiltroAvanzado(estado.filtroAvanzado);
+                var ds = crearDataSource(rawData, camposConAcomodo(estado.fields));
+                pivotGrid.option("dataSource", ds);
+                if ((estado.rowExpandedPaths || []).length || (estado.columnExpandedPaths || []).length) {
+                    ds.load().done(function() {
+                        ds.state(Object.assign(ds.state(), {
+                            rowExpandedPaths: estado.rowExpandedPaths || [],
+                            columnExpandedPaths: estado.columnExpandedPaths || []
+                        }));
+                    });
+                }
+            }
 
             // El formato base (rep_pivot_dinamico, id 0) no lo puede modificar ningún usuario:
             // solo se guardan cambios sobre sus plantillas (rep_plantilla_pivot_usuario); para
@@ -700,22 +744,87 @@
             var filtroAvanzadoActivo = true;  // casilla de la barra de filtros
 
             var muestraFila = rawData[0] || {};
+
+            function valoresDistintos(dataField) {
+                var vistos = {};
+                var valores = [];
+                rawData.forEach(function(fila) {
+                    var v = fila[dataField];
+                    if (v === null || v === undefined || v === "" || vistos.hasOwnProperty(v)) return;
+                    vistos[v] = true;
+                    valores.push(v);
+                });
+                return valores.sort(function(a, b) {
+                    return typeof a === "number" && typeof b === "number" ? a - b : String(a).localeCompare(String(b), "es");
+                });
+            }
+
             var camposFiltro = [];
             var camposFiltroPorDataField = {};
+            var valoresPorCampo = {};  // valores distintos de cada campo (para la lista de "Es alguno de")
             (customFields || []).forEach(function(f) {
                 var dataField = f.dataField || f.FieldName;
                 if (!dataField || f.cociente || camposFiltroPorDataField[dataField]) return;
                 var tipo = f.dataType === "date" ? "date" : (typeof muestraFila[dataField] === "number" ? "number" : "string");
                 var campo = { dataField: dataField, caption: f.caption || f.Caption || dataField, dataType: tipo };
-                if (tipo === "date") campo.format = "dd/MM/yyyy";
+                if (tipo === "date") {
+                    campo.format = "dd/MM/yyyy";
+                } else {
+                    // "Es alguno de / No es ninguno de": lo mismo que marcar valores en el embudo
+                    campo.filterOperations = tipo === "string"
+                        ? ["contains", "notcontains", "startswith", "endswith", "=", "<>", "anyof", "noneof", "isblank", "isnotblank"]
+                        : ["=", "<>", "<", ">", "<=", ">=", "between", "anyof", "noneof", "isblank", "isnotblank"];
+                    valoresPorCampo[dataField] = valoresDistintos(dataField);
+                }
                 camposFiltro.push(campo);
                 camposFiltroPorDataField[dataField] = campo;
             });
             camposFiltro.sort(function(a, b) { return a.caption.localeCompare(b.caption, "es"); });
 
             var $filterBuilder = $("<div>");
+            // FilterBuilder solo trae "anyof/noneof" dentro del DataGrid; aquí se definen como operaciones propias
+            function operacionLista(nombre, caption, icono, excluir) {
+                return {
+                    name: nombre,
+                    caption: caption,
+                    icon: icono,
+                    dataTypes: ["string", "number"],
+                    calculateFilterExpression: function(valores, campo) {
+                        if (!Array.isArray(valores) || !valores.length) return null;
+                        var expr = [];
+                        valores.forEach(function(v, i) {
+                            if (i) expr.push("or");
+                            expr.push([campo.dataField, "=", v]);
+                        });
+                        if (expr.length === 1) expr = expr[0];
+                        return excluir ? ["!", expr] : expr;
+                    },
+                    editorTemplate: function(condicion) {
+                        return $("<div>").dxTagBox({
+                            items: valoresPorCampo[condicion.field.dataField] || [],
+                            value: Array.isArray(condicion.value) ? condicion.value : [],
+                            searchEnabled: true,
+                            showSelectionControls: true,
+                            applyValueMode: "useButtons",
+                            maxDisplayedTags: 3,
+                            width: 320,
+                            placeholder: "Seleccione valores...",
+                            onValueChanged: function(e) { condicion.setValue(e.value); }
+                        });
+                    },
+                    customizeText: function(info) {
+                        // Se llama una vez por cada valor de la lista
+                        return info.valueText !== undefined ? info.valueText : textoValorFiltro(info.value);
+                    }
+                };
+            }
+
             var filterBuilder = $filterBuilder.dxFilterBuilder({
                 fields: camposFiltro,
+                customOperations: [
+                    operacionLista("anyof", "Es alguno de", "selectall", false),
+                    operacionLista("noneof", "No es ninguno de", "unselectall", true)
+                ],
                 value: null,
                 maxGroupLevel: 3,
                 groupOperations: ["and", "or", "notAnd", "notOr"]
@@ -731,8 +840,9 @@
                     return $("<div>").css({ height: "100%", overflow: "auto" }).append($filterBuilder);
                 },
                 onHiding: function() {
-                    // Si se cerró sin aceptar, el editor vuelve al filtro aplicado
+                    // Si se cerró sin aceptar, el editor vuelve al filtro aplicado y el embudo se queda como estaba
                     filterBuilder.option("value", filtroAvanzado);
+                    camposTraidosDelEmbudo = [];
                 },
                 toolbarItems: [
                     {
@@ -748,6 +858,12 @@
                                 filtroAvanzado = (Array.isArray(valor) && valor.length) ? valor : null;
                                 filtroAvanzadoActivo = true;
                                 $("#chk-filtro-activo").prop("checked", true);
+                                // Los filtros del embudo que se pasaron al editor ya viven en el filtro avanzado
+                                var ds = pivotGrid.getDataSource();
+                                camposTraidosDelEmbudo.forEach(function(indice) {
+                                    ds.field(indice, { filterValues: null, filterType: "include" });
+                                });
+                                camposTraidosDelEmbudo = [];
                                 popupFiltro.hide();
                                 aplicarFiltroAvanzado();
                             }
@@ -778,8 +894,39 @@
                 filterBuilder.option("value", filtroAvanzado);
             }
 
+            // Índices de los campos cuyo filtro del embudo se pasó al editor (se limpian solo al Aceptar)
+            var camposTraidosDelEmbudo = [];
+
+            // Convierte lo marcado en el embudo de cada campo en condiciones del editor:
+            // "Etiqueta No es DESECHO" -> ["Etiqueta", "noneof", ["DESECHO"]]
+            function condicionesDelEmbudo() {
+                var condiciones = [];
+                camposTraidosDelEmbudo = [];
+                pivotGrid.getDataSource().fields().forEach(function(f) {
+                    var campo = camposFiltroPorDataField[f.dataField];
+                    if (!campo || !valoresPorCampo[f.dataField] || f.groupInterval || !f.filterValues || !f.filterValues.length) return;
+                    // Valores jerárquicos (rutas de grupos) se quedan en el embudo
+                    if (f.filterValues.some(Array.isArray)) return;
+                    condiciones.push([f.dataField, f.filterType === "exclude" ? "noneof" : "anyof", f.filterValues.slice()]);
+                    camposTraidosDelEmbudo.push(f.index);
+                });
+                return condiciones;
+            }
+
+            function unirCondiciones(partes) {
+                partes = partes.filter(function(p) { return Array.isArray(p) && p.length; });
+                if (!partes.length) return null;
+                if (partes.length === 1) return partes[0];
+                var unidas = [];
+                partes.forEach(function(p, i) {
+                    if (i) unidas.push("and");
+                    unidas.push(p);
+                });
+                return unidas;
+            }
+
             function abrirEditorFiltro(dataField) {
-                var valor = filtroAvanzado;
+                var valor = unirCondiciones([filtroAvanzado].concat(condicionesDelEmbudo()));
                 if (dataField) {
                     var campo = camposFiltroPorDataField[dataField];
                     var condicion = [dataField, campo && campo.dataType === "string" ? "contains" : "=", ""];
@@ -819,7 +966,7 @@
                 "=": "Es igual a", "<>": "No es igual a", "<": "Menor que", "<=": "Menor o igual a",
                 ">": "Mayor que", ">=": "Mayor o igual a", "contains": "Contiene", "notcontains": "No contiene",
                 "startswith": "Comienza por", "endswith": "Termina con", "between": "Entre",
-                "anyof": "Es alguno de", "noneof": "No es ninguno de", "isblank": "Está vacío", "isnotblank": "No está vacío"
+                "anyof": "Es", "noneof": "No es", "isblank": "Está vacío", "isnotblank": "No está vacío"
             };
 
             function escaparHtml(texto) {
@@ -843,7 +990,11 @@
                     var campo = camposFiltroPorDataField[expr[0]];
                     var html = '<span class="campo">' + escaparHtml(campo ? campo.caption : expr[0]) + "</span> " +
                                '<span class="operador">' + escaparHtml(textoOperadores[expr[1]] || expr[1]) + "</span>";
-                    if (expr.length > 2) html += ' <span class="valor">' + escaparHtml(textoValorFiltro(expr[2])) + "</span>";
+                    if (expr.length > 2) {
+                        var valorTexto = (expr[1] === "anyof" || expr[1] === "noneof") && Array.isArray(expr[2])
+                            ? textoValoresEncabezado(expr[2]) : textoValorFiltro(expr[2]);
+                        html += ' <span class="valor">' + escaparHtml(valorTexto) + "</span>";
+                    }
                     return html;
                 }
                 var partes = expr.map(function(x) {
@@ -886,13 +1037,16 @@
                     $texto.append($chip);
                 });
 
+                // La barra siempre está visible para poder abrir "Editar filtro" aunque no haya filtros
+                if (!hayFiltros) {
+                    $texto.append('<span class="text-gray-400 italic">Sin filtros. Use "Editar filtro" o el embudo de cada campo.</span>');
+                }
                 var $barra = $("#barra-filtros");
-                var altoAntes = $barra.hasClass("hidden") ? 0 : $barra.outerHeight();
-                $barra.toggleClass("hidden", !hayFiltros).toggleClass("flex", hayFiltros)
-                      .toggleClass("filtro-inactivo", !!filtroAvanzado && !filtroAvanzadoActivo);
+                var altoAntes = $barra.outerHeight();
+                $barra.toggleClass("filtro-inactivo", !!filtroAvanzado && !filtroAvanzadoActivo);
+                $("#btn-quitar-filtros").toggle(hayFiltros);
                 $("#chk-filtro-activo").toggle(!!filtroAvanzado);
-                var altoDespues = $barra.hasClass("hidden") ? 0 : $barra.outerHeight();
-                if (altoAntes !== altoDespues) ajustarAlturaPivot();
+                if (altoAntes !== $barra.outerHeight()) ajustarAlturaPivot();
             }
 
             $("#btn-filtro-win, #btn-editar-filtro").on("click", function() { abrirEditorFiltro(); });
@@ -913,6 +1067,11 @@
                 ds.reload();
             });
 
+            // Al abrir, si el formato base trae filtro avanzado se aplica de una vez
+            if (configBase.filtroAvanzado && esFormatoBase(comboPlantillas.option("selectedItem"))) {
+                establecerFiltroAvanzado(configBase.filtroAvanzado);
+                aplicarFiltroAvanzado();
+            }
             actualizarBarraFiltros();
 
             // Función para exportar a Excel con encabezado corporativo (Logo, Nombre Empresa, Título y Fechas)

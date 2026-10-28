@@ -1,0 +1,148 @@
+{% extends 'admin/base_site.html' %}
+{% block content %}
+<style>
+    .vac { --vac-verde: #5b893f; --vac-verde-claro: #e6f3df; --vac-borde: #e2e8f0; --vac-texto: #0f172a; --vac-suave: #64748b;
+           --vac-fondo: #f8fafc; --vac-tarjeta: #ffffff; --vac-ambar: #b45309; --vac-ambar-claro: #fef3c7;
+           --vac-rojo: #b91c1c; --vac-rojo-claro: #fee2e2; --vac-azul: #1d4ed8; --vac-azul-claro: #dbeafe;
+           color: var(--vac-texto); background: var(--vac-fondo); min-height: 100vh; padding: 24px 32px; font-size: 14px; }
+    html.dark .vac { --vac-borde: #334155; --vac-texto: #f1f5f9; --vac-suave: #94a3b8; --vac-fondo: #0a0a0a; --vac-tarjeta: #171717;
+                     --vac-verde-claro: #1a2912; --vac-ambar-claro: #451a03; --vac-rojo-claro: #450a0a; --vac-azul-claro: #172554;
+                     --vac-ambar: #fbbf24; --vac-rojo: #f87171; --vac-azul: #93c5fd; --vac-verde: #93c375; }
+    @media (max-width: 768px) { .vac { padding: 16px; } }
+
+    .vac-encabezado { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px;
+                      border-bottom: 1px solid var(--vac-borde); padding-bottom: 16px; margin-bottom: 20px; }
+    .vac-encabezado h1 { font-size: 22px; font-weight: 800; margin: 0; letter-spacing: -0.01em; }
+    .vac-encabezado p { color: var(--vac-suave); margin: 4px 0 0; }
+    .vac-acciones { display: flex; flex-wrap: wrap; gap: 8px; }
+
+    .vac-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 8px; font-weight: 600;
+               font-size: 13px; border: 1px solid var(--vac-borde); background: var(--vac-tarjeta); color: var(--vac-texto);
+               cursor: pointer; text-decoration: none; line-height: 1.2; }
+    .vac-btn:hover { border-color: var(--vac-suave); }
+    .vac-btn .material-symbols-outlined { font-size: 18px; }
+    .vac-btn-primario { background: var(--vac-verde); border-color: var(--vac-verde); color: #fff; }
+    .vac-btn-primario:hover { filter: brightness(0.95); border-color: var(--vac-verde); }
+    .vac-btn-peligro { color: var(--vac-rojo); }
+    .vac-btn-chico { padding: 4px 10px; font-size: 12px; }
+
+    .vac-tarjetas { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .vac-tarjeta { background: var(--vac-tarjeta); border: 1px solid var(--vac-borde); border-radius: 12px; padding: 16px; }
+    .vac-tarjeta .etiqueta { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--vac-suave); }
+    .vac-tarjeta .valor { font-size: 28px; font-weight: 800; margin-top: 4px; font-variant-numeric: tabular-nums; }
+    .vac-tarjeta .nota { font-size: 12px; color: var(--vac-suave); margin-top: 2px; }
+    .vac-tarjeta.destacada { border-color: var(--vac-verde); background: var(--vac-verde-claro); }
+    .vac-tarjeta.destacada .valor { color: var(--vac-verde); }
+
+    .vac-panel { background: var(--vac-tarjeta); border: 1px solid var(--vac-borde); border-radius: 12px; margin-bottom: 20px; overflow: hidden; }
+    .vac-panel > h2 { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--vac-suave);
+                      margin: 0; padding: 14px 16px; border-bottom: 1px solid var(--vac-borde); display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .vac-panel .cuerpo { padding: 16px; }
+    .vac-vacio { padding: 28px 16px; text-align: center; color: var(--vac-suave); }
+
+    .vac-tabla-contenedor { overflow-x: auto; }
+    .vac-tabla { width: 100%; border-collapse: collapse; }
+    .vac-tabla th { text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+                    color: var(--vac-suave); padding: 10px 12px; border-bottom: 1px solid var(--vac-borde); white-space: nowrap; background: var(--vac-fondo); }
+    .vac-tabla td { padding: 10px 12px; border-bottom: 1px solid var(--vac-borde); vertical-align: top; }
+    .vac-tabla tbody tr:last-child td { border-bottom: 0; }
+    .vac-tabla tbody tr:hover td { background: rgba(114, 166, 81, 0.05); }
+    .vac-tabla .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .vac-tabla .sub { color: var(--vac-suave); font-size: 12px; }
+    .vac-tabla a { color: var(--vac-verde); font-weight: 600; text-decoration: none; }
+    .vac-tabla a:hover { text-decoration: underline; }
+
+    .vac-estatus { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+    .vac-estatus.pendiente_jefe, .vac-estatus.pendiente_rh { background: var(--vac-ambar-claro); color: var(--vac-ambar); }
+    .vac-estatus.aprobada { background: var(--vac-verde-claro); color: var(--vac-verde); }
+    .vac-estatus.rechazada { background: var(--vac-rojo-claro); color: var(--vac-rojo); }
+    .vac-estatus.cancelada { background: var(--vac-fondo); color: var(--vac-suave); border: 1px solid var(--vac-borde); }
+    .vac-marca { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase;
+                 background: var(--vac-azul-claro); color: var(--vac-azul); margin-left: 4px; }
+
+    .vac-mensaje { padding: 12px 14px; border-radius: 8px; margin-bottom: 16px; font-weight: 500; border: 1px solid transparent; }
+    .vac-mensaje.success { background: var(--vac-verde-claro); color: var(--vac-verde); border-color: var(--vac-verde); }
+    .vac-mensaje.error { background: var(--vac-rojo-claro); color: var(--vac-rojo); border-color: var(--vac-rojo); }
+    .vac-mensaje.warning, .vac-mensaje.info { background: var(--vac-ambar-claro); color: var(--vac-ambar); }
+
+    .vac-campo { display: flex; flex-direction: column; gap: 6px; }
+    .vac-campo label { font-size: 12px; font-weight: 700; color: var(--vac-suave); text-transform: uppercase; letter-spacing: 0.04em; }
+    .vac-campo input, .vac-campo select, .vac-campo textarea, .vac-filtros input, .vac-filtros select {
+        border: 1px solid var(--vac-borde); border-radius: 8px; padding: 8px 10px; background: var(--vac-tarjeta); color: var(--vac-texto); font-size: 14px; }
+    .vac-campo textarea { min-height: 80px; resize: vertical; }
+    .vac-rejilla { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+    .vac-filtros { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--vac-borde); }
+
+    .vac-paginacion { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-top: 1px solid var(--vac-borde); color: var(--vac-suave); font-size: 13px; }
+    .vac-paginacion .vac-acciones a { text-decoration: none; }
+
+    .vac-periodos { display: flex; flex-wrap: wrap; gap: 8px; }
+    .vac-periodo { border: 1px solid var(--vac-borde); border-radius: 8px; padding: 8px 12px; min-width: 110px; }
+    .vac-periodo .anio { font-size: 12px; color: var(--vac-suave); font-weight: 700; }
+    .vac-periodo .dias { font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .vac-periodo.agotado { opacity: 0.5; }
+
+    /* El reset de Tailwind/Unfold quita el centrado nativo de <dialog> */
+    .vac-dialogo { position: fixed; inset: 0; margin: auto; height: fit-content; max-height: calc(100vh - 32px);
+                   border: 1px solid #e2e8f0; border-radius: 12px; padding: 0; width: min(460px, calc(100vw - 32px));
+                   background: #ffffff; color: #0f172a; box-shadow: 0 20px 50px rgba(15, 23, 42, 0.25); font-size: 14px; }
+    html.dark .vac-dialogo { background: #171717; color: #f1f5f9; border-color: #334155; }
+    .vac-dialogo textarea { width: 100%; border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px 10px; min-height: 80px; background: transparent; color: inherit; }
+    .vac-dialogo::backdrop { background: rgba(15, 23, 42, 0.45); }
+    .vac-dialogo form { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+    .vac-dialogo h3 { margin: 0; font-size: 16px; font-weight: 800; }
+</style>
+
+<div class="vac">
+    {# Los mensajes (messages framework) los muestra la plantilla base de Unfold #}
+    {% block vac_contenido %}{% endblock %}
+
+{# Diálogo único para aprobar / rechazar / cancelar con nota (dentro de .vac para heredar sus variables) #}
+<dialog id="vac-dialogo" class="vac-dialogo">
+    <form method="post" id="vac-dialogo-form">
+        {% csrf_token %}
+        <input type="hidden" name="accion" id="vac-dialogo-accion">
+        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+        <h3 id="vac-dialogo-titulo"></h3>
+        <p id="vac-dialogo-texto" style="margin:0;color:var(--vac-suave)"></p>
+        <div class="vac-campo" id="vac-dialogo-nota-campo">
+            <label for="vac-dialogo-nota" id="vac-dialogo-nota-etiqueta">Nota</label>
+            <textarea name="nota" id="vac-dialogo-nota"></textarea>
+        </div>
+        <div class="vac-acciones" style="justify-content:flex-end">
+            <button type="button" class="vac-btn" onclick="this.closest('dialog').close()">Regresar</button>
+            <button type="submit" class="vac-btn vac-btn-primario" id="vac-dialogo-enviar">Confirmar</button>
+        </div>
+    </form>
+</dialog>
+</div>
+<script>
+    // data-accion="aprobar|rechazar|cancelar" data-url="..." data-folio="A-123" data-nombre="..."
+    document.addEventListener("click", function (e) {
+        var btn = e.target.closest("[data-accion]");
+        if (!btn) return;
+        var accion = btn.dataset.accion;
+        var dialogo = document.getElementById("vac-dialogo");
+        var textos = {
+            aprobar: ["Autorizar " + btn.dataset.folio, btn.dataset.nombre, "Nota (opcional)", "Autorizar", false],
+            rechazar: ["Rechazar " + btn.dataset.folio, btn.dataset.nombre, "Motivo del rechazo (mínimo 8 caracteres)", "Rechazar", true],
+            cancelar: ["Cancelar " + btn.dataset.folio, "La solicitud se cancelará y los días regresan a tu saldo.", "", "Cancelar solicitud", false]
+        }[accion];
+        document.getElementById("vac-dialogo-form").action = btn.dataset.url;
+        document.getElementById("vac-dialogo-accion").value = accion;
+        document.getElementById("vac-dialogo-titulo").textContent = textos[0];
+        document.getElementById("vac-dialogo-texto").textContent = textos[1] || "";
+        document.getElementById("vac-dialogo-nota-etiqueta").textContent = textos[2];
+        document.getElementById("vac-dialogo-nota-campo").style.display = accion === "cancelar" ? "none" : "";
+        var nota = document.getElementById("vac-dialogo-nota");
+        nota.value = "";
+        nota.required = textos[4];
+        nota.minLength = textos[4] ? 8 : 0;
+        var enviar = document.getElementById("vac-dialogo-enviar");
+        enviar.textContent = textos[3];
+        enviar.className = "vac-btn " + (accion === "aprobar" ? "vac-btn-primario" : "vac-btn-peligro");
+        dialogo.showModal();
+        if (accion !== "cancelar") nota.focus();
+    });
+</script>
+{% endblock %}

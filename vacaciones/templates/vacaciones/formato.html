@@ -1,0 +1,130 @@
+{% load static vacaciones_extras %}<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Vacaciones {{ s.folio_texto }} · {{ empleado.nombre_largo }}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+    <style>
+        :root { --verde: #6d854b; --verde-claro: #d7e4c4; --texto: #18181b; --suave: #52525b; }
+        * { box-sizing: border-box; }
+        body { margin: 0; background: #f4f4f5; color: var(--texto); font-family: "Inter", "Segoe UI", Arial, sans-serif; font-size: 14px; }
+        .barra { display: flex; gap: 8px; justify-content: center; padding: 16px; flex-wrap: wrap; }
+        .barra a, .barra button { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 8px; font-weight: 600; font-size: 13px;
+                                  border: 1px solid #d4d4d8; background: #fff; color: var(--texto); cursor: pointer; text-decoration: none; font-family: inherit; }
+        .barra button { background: #5b893f; border-color: #5b893f; color: #fff; }
+        .barra .material-symbols-outlined { font-size: 18px; }
+        .estado { text-align: center; color: #b45309; font-weight: 600; margin: 0 16px 12px; }
+        article { max-width: 820px; margin: 0 auto 32px; background: #fff; padding: 32px; border: 1px solid #e4e4e7; border-radius: 12px; }
+        .cabecera { display: grid; grid-template-columns: 110px minmax(0, 1fr) 110px; align-items: start; gap: 8px; border-bottom: 1px solid var(--verde); padding-bottom: 16px; }
+        .cabecera .centro { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+        .cabecera img { height: 40px; width: auto; }
+        .titulo { font-size: 11px; font-weight: 800; letter-spacing: 0.12em; color: var(--verde); text-transform: uppercase; margin: 0; }
+        .consecutivo { width: 100%; border-collapse: collapse; text-align: center; font-size: 9px; line-height: 1.2; }
+        .consecutivo th, .consecutivo td { border: 1px solid var(--verde); padding: 2px 4px; }
+        .consecutivo th { background: var(--verde-claro); color: #5a703e; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; }
+        .consecutivo td.rotulo { font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; }
+        section { margin-top: 16px; border: 1px solid var(--verde); padding: 12px; break-inside: avoid; }
+        section h2 { margin: 0 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--verde); text-align: center; font-size: 12px;
+                     font-weight: 800; letter-spacing: 0.18em; color: var(--verde); text-transform: uppercase; }
+        .rejilla { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+        .c2 { grid-column: span 2; } .c3 { grid-column: span 3; } .c6 { grid-column: span 6; }
+        .campo .rotulo { font-size: 11px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
+        .campo .valor { margin-top: 4px; color: #27272a; }
+        .observaciones { margin-top: 12px; }
+        .observaciones .valor { background: #fafafa; border-radius: 8px; padding: 10px; margin-top: 4px; }
+        .firmas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px; }
+        .firma { padding-top: 80px; text-align: center; }
+        .firma .linea { width: 80%; max-width: 150px; margin: 0 auto 8px; border-top: 2px solid #27272a; }
+        .firma .rotulo { font-weight: 800; text-transform: uppercase; }
+        .firma .nombre { color: var(--suave); }
+        @media (max-width: 640px) {
+            article { padding: 16px; }
+            .rejilla { grid-template-columns: minmax(0, 1fr); } .c2, .c3, .c6 { grid-column: auto; }
+            .firmas { grid-template-columns: minmax(0, 1fr); }
+            .cabecera { grid-template-columns: minmax(0, 1fr) 100px; } .cabecera .vacio { display: none; }
+        }
+        @media print {
+            @page { size: letter; margin: 12mm; }
+            body { background: #fff; font-size: 12px; }
+            .barra, .estado { display: none; }
+            article { max-width: none; margin: 0; padding: 0; border: 0; border-radius: 0; }
+            .firma { padding-top: 64px; }
+        }
+    </style>
+</head>
+<body>
+<div class="barra">
+    <a href="javascript:history.back()"><span class="material-symbols-outlined">arrow_back</span>Regresar</a>
+    <button type="button" onclick="window.print()"><span class="material-symbols-outlined">print</span>Imprimir</button>
+</div>
+{% if s.estatus != 'aprobada' %}<p class="estado">Esta solicitud está «{{ s.get_estatus_display }}»: el formato es solo de consulta.</p>{% endif %}
+
+<article>
+    <div class="cabecera">
+        <div class="vacio"></div>
+        <div class="centro">
+            <img src="{% static 'img/logo_grupo_fruver.png' %}" alt="Grupo Fruver">
+            <p class="titulo">Solicitud y autorización de vacaciones</p>
+        </div>
+        <table class="consecutivo">
+            <thead><tr><th>Consecutivo</th></tr></thead>
+            <tbody>
+                <tr><td class="rotulo">Serie-Folio</td></tr>
+                <tr><td>{{ s.folio_texto }}</td></tr>
+                <tr><td class="rotulo">Fecha de emisión</td></tr>
+                <tr><td>{{ emision|date:"d/M/y"|lower }}</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <section>
+        <h2>I. Datos del empleado</h2>
+        <div class="rejilla">
+            <div class="campo c2"><div class="rotulo">Número de empleado</div><div class="valor">{{ empleado.id_empleado }}</div></div>
+            <div class="campo c2"><div class="rotulo">Nombre del empleado</div><div class="valor">{{ empleado.nombre_largo }}</div></div>
+            <div class="campo c2"><div class="rotulo">Puesto</div><div class="valor">{{ empleado.id_puesto|default:"—" }}</div></div>
+            <div class="campo c2"><div class="rotulo">Fecha de ingreso</div><div class="valor">{{ empleado.fechaalta|date:"d/M/y"|lower|default:"—" }}</div></div>
+            <div class="campo c2"><div class="rotulo">Departamento</div><div class="valor">{{ empleado.id_departamento|default:"—" }}</div></div>
+            <div class="campo c2"><div class="rotulo">Empresa</div><div class="valor">{{ s.empresa.nombre }}</div></div>
+        </div>
+    </section>
+
+    <section>
+        <h2>II. Datos del periodo vacacional</h2>
+        <div class="rejilla">
+            <div class="campo c3"><div class="rotulo">Periodo al que corresponden</div><div class="valor">{{ s.fecha_inicio|date:"Y" }}</div></div>
+            <div class="campo c3"><div class="rotulo">Antigüedad laboral</div><div class="valor">{{ anios }} año{{ anios|pluralize }}</div></div>
+            <div class="campo c2"><div class="rotulo">Días que le corresponden</div><div class="valor">{{ derecho|dias }}</div></div>
+            <div class="campo c2"><div class="rotulo">Días disfrutados</div><div class="valor">{{ disfrutados|dias }}</div></div>
+            <div class="campo c2"><div class="rotulo">Días disponibles</div><div class="valor">{{ disponibles|dias }}</div></div>
+        </div>
+    </section>
+
+    <section>
+        <h2>III. Solicitud de días de disfrute</h2>
+        <div class="rejilla">
+            <div class="campo c3"><div class="rotulo">Días a disfrutar en este periodo</div><div class="valor">{{ s.dias_habiles|dias }}</div></div>
+            <div class="campo c3"><div class="rotulo">Días disponibles actualizados</div><div class="valor">{{ actualizados|dias }}</div></div>
+            {% if cargo %}
+            <div class="campo c6"><div class="rotulo">Días descontados por periodo</div>
+                <div class="valor">{% for anio, d in cargo %}{{ anio }}: {{ d }}{% if not forloop.last %} · {% endif %}{% endfor %}</div></div>
+            {% endif %}
+            <div class="campo c2"><div class="rotulo">Fecha de inicio</div><div class="valor">{{ s.fecha_inicio|date:"j \d\e F Y" }}</div></div>
+            <div class="campo c2"><div class="rotulo">Fecha de término</div><div class="valor">{{ s.fecha_fin|date:"j \d\e F Y" }}</div></div>
+            <div class="campo c2"><div class="rotulo">Día en que deberá presentarse a trabajar</div><div class="valor">{{ regreso|date:"l, j \d\e F Y" }}</div></div>
+        </div>
+        <div class="campo observaciones">
+            <div class="rotulo">Observaciones</div>
+            <div class="valor">{{ observaciones|default:"—" }}{% if s.extraordinaria %} (Caso extraordinario){% endif %}</div>
+        </div>
+    </section>
+
+    <section class="firmas">
+        <div class="firma"><div class="linea"></div><div class="rotulo">Solicitante</div><div class="nombre">{{ empleado.nombre_largo }}</div></div>
+        <div class="firma"><div class="linea"></div><div class="rotulo">Autoriza</div><div class="nombre">{{ nombre_jefe }}</div></div>
+        <div class="firma"><div class="linea"></div><div class="rotulo">Recursos humanos</div><div class="nombre">{{ responsable_rh }}</div></div>
+    </section>
+</article>
+</body>
+</html>

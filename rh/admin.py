@@ -50,7 +50,7 @@ class CustomAdminSite(UnfoldAdminSite):
             header_text = "Tablas Dinámicas"
 
         # 3. Módulo Recursos Humanos (Evaluaciones, Empleados, Puestos, etc.)
-        elif any(k in path for k in ['/admin/rh/', 'evaluacion', 'empleado', 'puesto', 'departamento', 'competencia', 'resumen', 'panel']):
+        elif any(k in path for k in ['/admin/rh/', '/admin/vacaciones/', 'evaluacion', 'empleado', 'puesto', 'departamento', 'competencia', 'resumen', 'panel']):
             header_text = "Recursos Humanos"
 
         # 4. Dashboard / Inicio

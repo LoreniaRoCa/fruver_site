@@ -1,0 +1,59 @@
+{% extends 'vacaciones/base.html' %}
+{% load vacaciones_extras %}
+{% block title %}Saldos del personal{% endblock %}
+{% block vac_contenido %}
+<div class="vac-encabezado">
+    <div>
+        <h1>Saldos del personal</h1>
+        <p>Empleados activos de {{ empresa_activa.nombre|default:"la empresa activa" }}. Haz clic en un nombre para ver su historial.</p>
+    </div>
+    <div class="vac-acciones">
+        <a class="vac-btn" href="{% url 'vacaciones:solicitudes' %}"><span class="material-symbols-outlined">list_alt</span>Solicitudes</a>
+        <a class="vac-btn vac-btn-primario" href="{% url 'vacaciones:solicitar' %}"><span class="material-symbols-outlined">add</span>Capturar formato</a>
+    </div>
+</div>
+
+<div class="vac-panel">
+    <div class="vac-filtros">
+        <input type="search" id="buscar" placeholder="Buscar por nombre, número o departamento..." style="flex:1;min-width:220px">
+        <span class="sub" id="contador" style="color:var(--vac-suave)">{{ filas|length }} empleados</span>
+    </div>
+    <div class="vac-tabla-contenedor">
+        <table class="vac-tabla" id="tabla-personal">
+            <thead><tr><th class="num">#</th><th>Empleado</th><th>Ingreso</th><th class="num">Antigüedad</th>
+                <th class="num">Corresponden</th><th class="num">Disfrutados</th><th class="num">En trámite</th><th class="num">Disponibles</th></tr></thead>
+            <tbody>
+            {% for f in filas %}
+                <tr data-buscar="{{ f.emp.nombre_largo|lower }} {{ f.emp.id_empleado }} {{ f.emp.id_departamento|lower }}">
+                    <td class="num">{{ f.emp.id_empleado }}</td>
+                    <td><a href="{% url 'vacaciones:empleado' f.emp.pk %}">{{ f.emp.nombre_largo }}</a>
+                        {% if f.sin_saldo %}<span class="vac-marca" title="Sin saldo al corte: se calcula desde su fecha de alta">Sin corte</span>{% endif %}
+                        <div class="sub">{{ f.emp.id_departamento|default:"" }}{% if f.emp.id_puesto %} · {{ f.emp.id_puesto }}{% endif %}</div></td>
+                    <td style="white-space:nowrap">{{ f.emp.fechaalta|date:"d/m/Y"|default:"—" }}</td>
+                    <td class="num">{{ f.anios }}</td>
+                    <td class="num">{{ f.derecho|dias }}</td>
+                    <td class="num">{{ f.disfrutados|dias }}</td>
+                    <td class="num">{{ f.pendientes|dias }}</td>
+                    <td class="num"><strong {% if f.disponibles < 0 %}style="color:var(--vac-rojo)"{% endif %}>{{ f.disponibles|dias }}</strong></td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+<script>
+(function () {
+    var filas = document.querySelectorAll("#tabla-personal tbody tr");
+    document.getElementById("buscar").addEventListener("input", function () {
+        var texto = this.value.trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+        var visibles = 0;
+        filas.forEach(function (tr) {
+            var ok = !texto || tr.dataset.buscar.normalize("NFD").replace(/[̀-ͯ]/g, "").indexOf(texto) !== -1;
+            tr.style.display = ok ? "" : "none";
+            if (ok) visibles++;
+        });
+        document.getElementById("contador").textContent = visibles + " empleados";
+    });
+})();
+</script>
+{% endblock %}

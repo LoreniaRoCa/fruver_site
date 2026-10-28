@@ -1,0 +1,91 @@
+{% extends 'vacaciones/base.html' %}
+{% load vacaciones_extras %}
+{% block title %}Aprobaciones de vacaciones{% endblock %}
+{% block vac_contenido %}
+<div class="vac-encabezado">
+    <div>
+        <h1>Aprobaciones</h1>
+        <p>Primero da el visto bueno el jefe inmediato y después Recursos Humanos autoriza.</p>
+    </div>
+</div>
+
+{% if not es_jefe and not es_rh %}
+<div class="vac-panel"><div class="vac-vacio">No tienes personal a cargo ni permiso de Recursos Humanos para autorizar vacaciones.</div></div>
+{% else %}
+
+<div class="vac-panel">
+    <h2>Esperan tu autorización <span class="vac-estatus pendiente_rh">{{ pendientes|length }}</span></h2>
+    {% if pendientes %}
+    <div class="vac-tabla-contenedor">
+        <table class="vac-tabla">
+            <thead><tr><th>Folio</th><th>Empleado</th><th>Periodo</th><th class="num">Días</th><th>Etapa</th><th>Motivo</th><th></th></tr></thead>
+            <tbody>
+            {% for s in pendientes %}
+                <tr>
+                    <td style="white-space:nowrap"><strong>{{ s.folio_texto }}</strong><div class="sub">{{ s.fecha_creacion|date:"d/m/Y" }}</div></td>
+                    <td>{% if es_rh %}<a href="{% url 'vacaciones:empleado' s.empleado.pk %}">{{ s.empleado.nombre_largo }}</a>{% else %}{{ s.empleado.nombre_largo }}{% endif %}
+                        <div class="sub">#{{ s.empleado.id_empleado }}{% if s.empleado.id_puesto %} · {{ s.empleado.id_puesto }}{% endif %}</div></td>
+                    <td style="white-space:nowrap">{{ s.fecha_inicio|date:"d/m/Y" }} – {{ s.fecha_fin|date:"d/m/Y" }}
+                        {% if s.extraordinaria %}<span class="vac-marca">Extraordinaria</span>{% endif %}</td>
+                    <td class="num">{{ s.dias_habiles|dias }}</td>
+                    <td><span class="vac-estatus {{ s.estatus }}">{{ s.get_estatus_display }}</span>
+                        {% if s.nota_jefe %}<div class="sub">Jefe: {{ s.nota_jefe }}</div>{% endif %}</td>
+                    <td class="sub">{{ s.motivo|default:"—" }}</td>
+                    <td style="white-space:nowrap;text-align:right">
+                        <button type="button" class="vac-btn vac-btn-chico vac-btn-primario" data-accion="aprobar" data-folio="{{ s.folio_texto }}"
+                                data-nombre="{{ s.empleado.nombre_largo }} · {{ s.dias_habiles|dias }} día{{ s.dias_habiles|pluralize }}" data-url="{% url 'vacaciones:accion' s.pk %}">
+                            {% if s.estatus == 'pendiente_jefe' %}Dar visto bueno{% else %}Autorizar{% endif %}</button>
+                        <button type="button" class="vac-btn vac-btn-chico vac-btn-peligro" data-accion="rechazar" data-folio="{{ s.folio_texto }}"
+                                data-nombre="{{ s.empleado.nombre_largo }}" data-url="{% url 'vacaciones:accion' s.pk %}">Rechazar</button>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="vac-vacio">No hay solicitudes pendientes de tu autorización.</div>
+    {% endif %}
+</div>
+
+{% if es_rh and en_espera_jefe %}
+<div class="vac-panel">
+    <h2>En espera del jefe inmediato <span class="vac-estatus pendiente_jefe">{{ en_espera_jefe|length }}</span></h2>
+    <div class="vac-tabla-contenedor">
+        <table class="vac-tabla">
+            <thead><tr><th>Folio</th><th>Empleado</th><th>Jefe inmediato</th><th>Periodo</th><th class="num">Días</th></tr></thead>
+            <tbody>
+            {% for s in en_espera_jefe %}
+                <tr>
+                    <td><strong>{{ s.folio_texto }}</strong></td>
+                    <td><a href="{% url 'vacaciones:empleado' s.empleado.pk %}">{{ s.empleado.nombre_largo }}</a></td>
+                    <td>{{ s.jefe.nombre_largo|default:"—" }}</td>
+                    <td style="white-space:nowrap">{{ s.fecha_inicio|date:"d/m/Y" }} – {{ s.fecha_fin|date:"d/m/Y" }}</td>
+                    <td class="num">{{ s.dias_habiles|dias }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<div class="vac-panel">
+    <h2>Resueltas recientemente</h2>
+    {% if resueltas %}
+    <div class="vac-tabla-contenedor">
+        <table class="vac-tabla">
+            <thead><tr><th>Folio</th><th>Empleado</th><th>Periodo</th><th class="num">Días</th><th>Estatus</th><th>Motivo</th><th></th></tr></thead>
+            <tbody>
+                {% for s in resueltas %}
+                    {% include 'vacaciones/_fila_solicitud.html' with mostrar_empleado=True %}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="vac-vacio">Sin movimientos.</div>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

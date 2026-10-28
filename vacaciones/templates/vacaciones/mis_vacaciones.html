@@ -1,0 +1,92 @@
+{% extends 'vacaciones/base.html' %}
+{% load vacaciones_extras %}
+{% block title %}Vacaciones · {{ empleado.nombre_largo }}{% endblock %}
+{% block vac_contenido %}
+<div class="vac-encabezado">
+    <div>
+        <h1>{% if es_propio %}Mis vacaciones{% else %}{{ empleado.nombre_largo }}{% endif %}</h1>
+        <p>
+            #{{ empleado.id_empleado }}{% if es_propio %} · {{ empleado.nombre_largo }}{% endif %}
+            {% if empleado.id_puesto %} · {{ empleado.id_puesto }}{% endif %}
+            {% if empleado.id_departamento %} · {{ empleado.id_departamento }}{% endif %}
+            · Ingreso {{ empleado.fechaalta|date:"d/m/Y"|default:"sin capturar" }}
+        </p>
+        <p>
+            {% if jefe %}Visto bueno: {{ jefe.nombre_largo }} → Recursos Humanos
+            {% else %}Sin jefe inmediato con usuario: las solicitudes van directo a Recursos Humanos{% endif %}
+        </p>
+    </div>
+    <div class="vac-acciones">
+        {% if not es_propio %}<a class="vac-btn" href="{% url 'vacaciones:personal' %}"><span class="material-symbols-outlined">arrow_back</span>Saldos del personal</a>{% endif %}
+        {% if es_propio or es_rh %}
+        <a class="vac-btn vac-btn-primario" href="{% url 'vacaciones:solicitar' %}{% if not es_propio %}?empleado={{ empleado.pk }}{% endif %}">
+            <span class="material-symbols-outlined">add</span>{% if es_propio %}Solicitar vacaciones{% else %}Capturar formato{% endif %}</a>
+        {% endif %}
+    </div>
+</div>
+
+{% if not empleado.fechaalta %}
+<div class="vac-mensaje warning">El empleado no tiene fecha de alta capturada; no se pueden calcular los aniversarios.</div>
+{% endif %}
+
+<div class="vac-tarjetas">
+    <div class="vac-tarjeta destacada">
+        <div class="etiqueta">Días disponibles</div>
+        <div class="valor">{{ saldo.disponibles|dias }}</div>
+        <div class="nota">Para solicitar hoy</div>
+    </div>
+    <div class="vac-tarjeta">
+        <div class="etiqueta">Días que corresponden</div>
+        <div class="valor">{{ saldo.derecho|dias }}</div>
+        <div class="nota">Saldo al corte + aniversarios</div>
+    </div>
+    <div class="vac-tarjeta">
+        <div class="etiqueta">Disfrutados</div>
+        <div class="valor">{{ saldo.disfrutados|dias }}</div>
+        <div class="nota">Autorizados desde el corte</div>
+    </div>
+    <div class="vac-tarjeta">
+        <div class="etiqueta">En trámite</div>
+        <div class="valor">{{ saldo.pendientes|dias }}</div>
+        <div class="nota">Pendientes de autorizar</div>
+    </div>
+    <div class="vac-tarjeta">
+        <div class="etiqueta">Antigüedad</div>
+        <div class="valor">{{ saldo.anios }}</div>
+        <div class="nota">año{{ saldo.anios|pluralize }} de servicio</div>
+    </div>
+</div>
+
+{% if saldo.periodos %}
+<div class="vac-panel">
+    <h2>Saldo por periodo <span style="text-transform:none;letter-spacing:0;font-weight:500">Se descuenta del más antiguo al más reciente</span></h2>
+    <div class="cuerpo vac-periodos">
+        {% for p in saldo.periodos %}
+        <div class="vac-periodo{% if p.restan <= 0 %} agotado{% endif %}">
+            <div class="anio">Periodo {{ p.anio }}</div>
+            <div class="dias">{{ p.restan|dias }} <span class="sub" style="font-size:12px;font-weight:500">de {{ p.dias|dias }}</span></div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<div class="vac-panel">
+    <h2>Solicitudes <span style="text-transform:none;letter-spacing:0;font-weight:500">{{ pagina.paginator.count }} en total</span></h2>
+    {% if pagina.object_list %}
+    <div class="vac-tabla-contenedor">
+        <table class="vac-tabla">
+            <thead><tr><th>Folio</th><th>Periodo</th><th class="num">Días</th><th>Estatus</th><th>Motivo</th><th></th></tr></thead>
+            <tbody>
+                {% for s in pagina.object_list %}
+                    {% include 'vacaciones/_fila_solicitud.html' with puede_cancelar=es_propio %}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% include 'vacaciones/_paginacion.html' %}
+    {% else %}
+    <div class="vac-vacio">Aún no hay solicitudes registradas.</div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -27,6 +27,7 @@ urlpatterns = [
     path('probar-correo/', probar_correo_view, name='probar_correo'),
 
     path('reportes/', include('reportes.urls', namespace='reportes')),
+    path('admin/rh/vacaciones/', include('vacaciones.urls', namespace='vacaciones')),
     
     path('admin/login/', CustomAdminLoginView.as_view(), name='login'),
     path('admin/dashboard/', dashboard_modulos_view, name='dashboard_modulos'),

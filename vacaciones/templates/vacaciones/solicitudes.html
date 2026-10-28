@@ -1,0 +1,45 @@
+{% extends 'vacaciones/base.html' %}
+{% block title %}Solicitudes del personal{% endblock %}
+{% block vac_contenido %}
+<div class="vac-encabezado">
+    <div>
+        <h1>Solicitudes del personal</h1>
+        <p>{{ pagina.paginator.count }} solicitudes{% if filtros.q or filtros.estatus or filtros.anio %} con los filtros aplicados{% endif %}.</p>
+    </div>
+    <div class="vac-acciones">
+        <a class="vac-btn" href="{% url 'vacaciones:personal' %}"><span class="material-symbols-outlined">account_balance_wallet</span>Saldos</a>
+        <a class="vac-btn vac-btn-primario" href="{% url 'vacaciones:solicitar' %}"><span class="material-symbols-outlined">add</span>Capturar formato</a>
+    </div>
+</div>
+
+<div class="vac-panel">
+    <form method="get" class="vac-filtros">
+        <input type="search" name="q" value="{{ filtros.q }}" placeholder="Nombre, número de empleado o folio" style="flex:1;min-width:220px">
+        <select name="estatus">
+            <option value="">Todos los estatus</option>
+            {% for valor, texto in estatus %}<option value="{{ valor }}" {% if filtros.estatus == valor %}selected{% endif %}>{{ texto }}</option>{% endfor %}
+        </select>
+        <select name="anio">
+            <option value="">Todos los años</option>
+            {% for a in anios %}<option value="{{ a }}" {% if filtros.anio == a|stringformat:"s" %}selected{% endif %}>{{ a }}</option>{% endfor %}
+        </select>
+        <button type="submit" class="vac-btn"><span class="material-symbols-outlined">filter_alt</span>Filtrar</button>
+        {% if filtros.q or filtros.estatus or filtros.anio %}<a class="vac-btn" href="{% url 'vacaciones:solicitudes' %}">Limpiar</a>{% endif %}
+    </form>
+    {% if pagina.object_list %}
+    <div class="vac-tabla-contenedor">
+        <table class="vac-tabla">
+            <thead><tr><th>Folio</th><th>Empleado</th><th>Periodo</th><th class="num">Días</th><th>Estatus</th><th>Motivo</th><th></th></tr></thead>
+            <tbody>
+                {% for s in pagina.object_list %}
+                    {% include 'vacaciones/_fila_solicitud.html' with mostrar_empleado=True %}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% include 'vacaciones/_paginacion.html' %}
+    {% else %}
+    <div class="vac-vacio">No hay solicitudes con esos filtros.</div>
+    {% endif %}
+</div>
+{% endblock %}

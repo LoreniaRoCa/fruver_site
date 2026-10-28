@@ -1,0 +1,19 @@
+{% load vacaciones_extras %}
+<tr>
+    <td style="white-space:nowrap"><strong>{{ s.folio_texto }}</strong>{% if s.liquidada %}<span class="vac-marca" title="Registrada antes del portal; ya está descontada en el saldo al corte">Histórico</span>{% endif %}</td>
+    {% if mostrar_empleado %}
+    <td>{{ s.empleado.nombre_largo }}<div class="sub">#{{ s.empleado.id_empleado }}{% if s.empleado.id_departamento %} · {{ s.empleado.id_departamento }}{% endif %}</div></td>
+    {% endif %}
+    <td style="white-space:nowrap">{{ s.fecha_inicio|date:"d/m/Y" }} – {{ s.fecha_fin|date:"d/m/Y" }}
+        {% if s.extraordinaria %}<span class="vac-marca" title="Solicitada con menos anticipación de la indicada en la política">Extraordinaria</span>{% endif %}</td>
+    <td class="num">{{ s.dias_habiles|dias }}</td>
+    <td><span class="vac-estatus {{ s.estatus }}">{{ s.get_estatus_display }}</span>
+        {% if s.nota_decision and s.estatus == 'rechazada' %}<div class="sub">{{ s.nota_decision }}</div>{% endif %}</td>
+    <td class="sub">{{ s.motivo|default:"—"|truncatechars:60 }}</td>
+    <td style="white-space:nowrap;text-align:right">
+        {% if s.estatus == 'aprobada' %}<a class="vac-btn vac-btn-chico" href="{% url 'vacaciones:formato' s.pk %}"><span class="material-symbols-outlined">print</span>Formato</a>{% endif %}
+        {% if puede_cancelar and s.esta_pendiente %}
+            <button type="button" class="vac-btn vac-btn-chico vac-btn-peligro" data-accion="cancelar" data-folio="{{ s.folio_texto }}" data-url="{% url 'vacaciones:accion' s.pk %}">Cancelar</button>
+        {% endif %}
+    </td>
+</tr>
