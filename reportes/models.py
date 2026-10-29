@@ -77,3 +77,42 @@ class PlantillaPivotUsuario(models.Model):
 
     def __str__(self):
         return f"{self.nombre_plantilla} ({self.usuario})"
+
+class BitacoraSincronizacion(models.Model):
+    """Cada ejecución de `manage.py subirsqlserver` (SQL Server -> Supabase), una fila por corrida."""
+    EN_PROCESO = 'en_proceso'
+    CORRECTO = 'correcto'
+    SIN_DATOS = 'sin_datos'
+    ERROR = 'error'
+    ESTATUS = [
+        (EN_PROCESO, 'En proceso'),
+        (CORRECTO, 'Correcto'),
+        (SIN_DATOS, 'Sin datos'),
+        (ERROR, 'Error'),
+    ]
+
+    proceso = models.PositiveSmallIntegerField(verbose_name="Proceso", help_text="Opción --tabla del comando")
+    nombre_proceso = models.CharField(max_length=100, verbose_name="Nombre")
+    tabla_destino = models.CharField(max_length=100, verbose_name="Tabla destino")
+    equipo = models.CharField(max_length=100, blank=True, default='', verbose_name="Equipo que lo ejecutó")
+    fecha_inicio = models.DateTimeField(verbose_name="Inicio")
+    fecha_fin = models.DateTimeField(null=True, blank=True, verbose_name="Fin")
+    estatus = models.CharField(max_length=20, choices=ESTATUS, default=EN_PROCESO)
+    registros = models.PositiveIntegerField(default=0, verbose_name="Registros subidos")
+    mensaje = models.TextField(blank=True, default='')
+
+    class Meta:
+        db_table = 'rep_bitacora_sincronizacion'
+        verbose_name = "Sincronización SQL Server"
+        verbose_name_plural = "Bitácora de sincronización"
+        ordering = ['-fecha_inicio']
+        indexes = [models.Index(fields=['proceso', '-fecha_inicio'], name='rep_bitsinc_proc_fecha_idx')]
+
+    def __str__(self):
+        return f"{self.nombre_proceso} {self.fecha_inicio:%d/%m/%Y %H:%M} ({self.get_estatus_display()})"
+
+    @property
+    def duracion(self):
+        if not self.fecha_fin:
+            return None
+        return self.fecha_fin - self.fecha_inicio

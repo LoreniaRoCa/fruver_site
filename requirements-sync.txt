@@ -1,0 +1,4 @@
+# Dependencias del equipo que sube SQL Server -> Supabase (manage.py subirsqlserver)
+-r requirements.txt
+pyodbc==5.3.0
+supabase==2.31.0
