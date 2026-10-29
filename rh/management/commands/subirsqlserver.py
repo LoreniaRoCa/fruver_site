@@ -1,23 +1,9 @@
-import os
-import socket
-from pathlib import Path
-from decimal import Decimal
-from datetime import date, datetime
-import pyodbc
-from dotenv import load_dotenv
-from supabase import create_client, Client
 from django.core.management.base import BaseCommand, CommandError
-from django.db import connection  # Permite ejecutar sentencias SQL directas en Supabase
-from django.utils import timezone
-from reportes.models import BitacoraSincronizacion
 
-NOMBRES_PROCESO = {1: "Inventario", 2: "Detalle de Ventas"}
-TABLAS_DESTINO = {1: "rep_eye_inventario", 2: "rep_detalleventas"}
+# La lógica vive en sincronizar_sqlserver.py (raíz del proyecto) para poder correrla sin Django
+# en otro equipo (Windows Server con Python 3.10). Este comando solo la llama desde el portal.
+from sincronizar_sqlserver import PROCESOS, sincronizar
 
-
-# 1. Localizar y cargar el .env
-BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
-load_dotenv(os.path.join(BASE_DIR, '.env'), override=True)
 
 class Command(BaseCommand):
     help = 'Sincroniza los datos de SQL Server con Supabase (Opción 1: Inventario, Opción 2: FruDetalleVentas)'
@@ -32,137 +18,11 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        opcion_tabla = options['tabla']
-        if opcion_tabla not in NOMBRES_PROCESO:
-            raise CommandError(f"Opción inválida: {opcion_tabla}. Usa 1 o 2.")
-
-        # 🟢 BITÁCORA: una fila por ejecución en rep_bitacora_sincronizacion (se ve en el admin)
-        self.bitacora = BitacoraSincronizacion.objects.create(
-            proceso=opcion_tabla,
-            nombre_proceso=NOMBRES_PROCESO[opcion_tabla],
-            tabla_destino=TABLAS_DESTINO[opcion_tabla],
-            equipo=socket.gethostname()[:100],
-            fecha_inicio=timezone.now(),
-        )
+        opcion = options['tabla']
+        if opcion not in PROCESOS:
+            raise CommandError(f"Opción inválida: {opcion}. Usa 1 o 2.")
         try:
-            registros = self.sincronizar(opcion_tabla)
+            sincronizar(opcion, salida=self.stdout.write)
         except Exception as e:
-            self.cerrar_bitacora(BitacoraSincronizacion.ERROR, mensaje=str(e))
-            # CommandError devuelve código de salida 1: el Programador de tareas lo marca como fallido
-            raise CommandError(f"🔴 Error: {e}")
-        if registros:
-            self.cerrar_bitacora(BitacoraSincronizacion.CORRECTO, registros=registros)
-        else:
-            self.cerrar_bitacora(BitacoraSincronizacion.SIN_DATOS, mensaje="No hay registros para sincronizar.")
-
-    def cerrar_bitacora(self, estatus, registros=0, mensaje=''):
-        self.bitacora.estatus = estatus
-        self.bitacora.registros = registros
-        self.bitacora.mensaje = mensaje[:2000]
-        self.bitacora.fecha_fin = timezone.now()
-        self.bitacora.save(update_fields=['estatus', 'registros', 'mensaje', 'fecha_fin'])
-
-    def sincronizar(self, opcion_tabla):
-        """Sube los datos y devuelve cuántos registros se insertaron (0 si no hubo datos)."""
-
-        SUPABASE_URL = os.getenv("SUPABASE_URL")
-        SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-
-        SQL_SERVER = os.getenv("SQL_SERVER", "localhost")
-        SQL_DATABASE = os.getenv("SQL_DATABASE")
-        SQL_USER = os.getenv("SQL_USER")
-        SQL_PASSWORD = os.getenv("SQL_PASSWORD")
-
-        SQL_CONN_STR = (
-            f"DRIVER={{SQL Server}};"
-            f"SERVER={SQL_SERVER};"
-            f"DATABASE={SQL_DATABASE};"
-            f"UID={SQL_USER};"
-            f"PWD={SQL_PASSWORD}"
-        )
-
-        if not SUPABASE_URL or not SUPABASE_KEY:
-            raise CommandError("Faltan variables de Supabase en el .env")
-
-        self.stdout.write("🟡 Conectando a SQL Server local...")
-        conn = pyodbc.connect(SQL_CONN_STR)
-        cursor = conn.cursor()
-
-        # Declaración de variables para el limpiado específico por fechas
-        f_ini_str = None
-        f_fin_str = None
-        campo_fecha = None  # Nombre de la columna de fecha en la tabla de Supabase
-
-        # LÓGICA SEGÚN EL PARÁMETRO SELECCIONADO
-        if opcion_tabla == 1:
-            self.stdout.write("🟡 [Opción 1] Ejecutando sp_frupa_inventario...")
-            query = (
-                "declare @FechaIni Datetime, @FechaFin Datetime "
-                "select @FechaFin = getdate() "
-                "select @FechaIni = d_inicio_tem from t_temporada where c_activo_tem = 1 "
-                "if @FechaIni is null begin set @FechaIni = dateadd(mm, -2, @FechaFin) end "
-                "exec sp_frupa_inventario @FechaIni, @FechaFin"
-            )
-            tabla_destino = "rep_eye_inventario"
-            # Si la opción 1 requiere limpiar toda la tabla, se mantendrá sin rango de fechas
-
-        elif opcion_tabla == 2:
-            # 🟢 DEFINICIÓN DEL RANGO DE FECHAS
-            f_ini_str = "2026-01-01"
-            f_fin_str = "2026-12-31"
-            campo_fecha = "FechaFac"  # ⚠️ Ajusta al nombre exacto de la columna de fecha en Supabase (ej. 'fecha', 'd_fecha', etc.)
-
-            # Formato YYYYMMDD para el Stored Procedure de SQL Server
-            f_ini_sql = f_ini_str.replace("-", "")
-            f_fin_sql = f_fin_str.replace("-", "")
-
-            self.stdout.write(f"🟡 [Opción 2] Consultando tabla FruDetalleVentas ({f_ini_str} al {f_fin_str})...")
-            query = f"exec AgroSmart_FRUSA.dbo.sp_fru_ventas_pivot '{f_ini_sql}', '{f_fin_sql}', 1"
-            tabla_destino = "rep_detalleventas"
-
-        else:
-            conn.close()
-            raise CommandError(f"Opción inválida: {opcion_tabla}. Usa 1 o 2.")
-
-        cursor.execute(query)
-        rows = cursor.fetchall()
-
-        if not rows:
-            self.stdout.write(self.style.WARNING("🟠 No hay registros para sincronizar."))
-            conn.close()
-            return 0
-
-        def serializar(val):
-            if isinstance(val, Decimal): return float(val)
-            if isinstance(val, (datetime, date)): return val.isoformat()
-            return val
-
-        columnas = [column[0] for column in cursor.description]
-        datos_a_subir = [
-            {col: serializar(val) for col, val in zip(columnas, row)}
-            for row in rows
-        ]
-        conn.close()
-
-        # 🟢 LIMPIADO SELECTIVO EN SUPABASE
-        with connection.cursor() as db_cursor:
-            if f_ini_str and f_fin_str and campo_fecha:
-                self.stdout.write(f"🟡 Eliminando datos anteriores en Supabase ({tabla_destino}) entre {f_ini_str} y {f_fin_str}...")
-                delete_sql = f'DELETE FROM public."{tabla_destino}" WHERE "{campo_fecha}"::date BETWEEN %s AND %s;'
-                db_cursor.execute(delete_sql, [f_ini_str, f_fin_str])
-            else:
-                self.stdout.write(f"🟡 Limpiando toda la tabla en Supabase ({tabla_destino}) mediante TRUNCATE...")
-                db_cursor.execute(f'TRUNCATE TABLE public."{tabla_destino}" RESTART IDENTITY;')
-
-        # Conexión e inserción masiva en Supabase
-        supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-        self.stdout.write(f"🟡 Insertando nuevos datos en {tabla_destino} ({len(datos_a_subir)} registros)...")
-        
-        # Subida por lotes (batching de 500 en 500 para evitar sobrecargar payloads HTTP)
-        batch_size = 500
-        for i in range(0, len(datos_a_subir), batch_size):
-            batch = datos_a_subir[i:i + batch_size]
-            supabase.table(tabla_destino).insert(batch).execute()
-
-        self.stdout.write(self.style.SUCCESS(f"🟢 ¡Sincronización completada! Registros subidos a '{tabla_destino}': {len(datos_a_subir)}"))
-        return len(datos_a_subir)
+            # Código de salida 1; el error ya quedó en rep_bitacora_sincronizacion
+            raise CommandError(f"Error: {e}")
