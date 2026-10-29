@@ -18,7 +18,6 @@ from django.contrib import admin
 from django.contrib.auth import logout
 #Para tablas dinamicas
 import pandas as pd
-import pygwalker as pyg
 from django.db import connection
 from reportes.models import Pivot_Dinamico
 from django.utils.text import slugify
