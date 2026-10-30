@@ -32,29 +32,42 @@ from .models import (
 )
 from django.db import connection
 from django.utils import timezone
-from django.contrib.staticfiles import finders
-from django.templatetags.static import static
+from core_app.empresas import empresas_permitidas, logo_de_empresa
 
 class CustomAdminLoginView(LoginView):
     template_name = "admin/login.html"
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['empresas_disponibles'] = Empresa.objects.filter(activa=True)
-        return context
-
     def form_valid(self, form):
-        # 1. Guardar la empresa seleccionada en la sesión
-        empresa_id = self.request.POST.get('empresa_id')
-        if empresa_id:
-            self.request.session['empresa_id'] = empresa_id
-            self.request.session['empresa_activa'] = empresa_id
-
-        # 2. Iniciar sesión formalmente en Django
+        # 1. Iniciar sesión (primero usuario y contraseña; la empresa se decide después)
         auth_login(self.request, form.get_user())
+
+        # 2. Con una sola empresa permitida entra directo; con varias (o ninguna) elige en la siguiente pantalla
+        empresas = list(empresas_permitidas(self.request.user).values_list('pk', flat=True))
+        if len(empresas) != 1:
+            return redirect('seleccionar_empresa')
+        self.request.session['empresa_id'] = self.request.session['empresa_activa'] = empresas[0]
 
         # 3. Redirigir a 'redireccionar_login' para que el Middleware evalúe si debe cambiar la clave
         return redirect('redireccionar_login')
+
+
+@login_required
+def seleccionar_empresa_view(request):
+    """Elegir (o cambiar) la empresa con la que se trabaja; solo las que el usuario tiene permitidas."""
+    empresas = list(empresas_permitidas(request.user))
+    if request.method == 'POST':
+        elegida = next((e for e in empresas if e.pk == request.POST.get('empresa_id')), None)
+        if elegida:
+            request.session['empresa_id'] = request.session['empresa_activa'] = elegida.pk
+            return redirect('redireccionar_login')
+        messages.error(request, "Selecciona una de tus empresas.")
+
+    actual = request.session.get('empresa_activa') or request.session.get('empresa_id')
+    return render(request, 'admin/seleccionar_empresa.html', {
+        'empresas': [{'empresa': e, 'logo': logo_de_empresa(e), 'actual': e.pk == actual} for e in empresas],
+        'nombre_usuario': (Empleado.objects.filter(user=request.user).values_list('nombre_largo', flat=True).first()
+                           or request.user.get_full_name() or request.user.username),
+    })
         
 def cerrar_sesion_view(request):
     """Cierra la sesión activa del usuario y limpia las cookies."""
@@ -1237,7 +1250,8 @@ def dashboard_modulos_view(request):
     modulos = [
         {
             "titulo": "Recursos Humanos",
-            "descripcion": "Evaluaciones de desempeño, vacaciones, empleados, puestos y competencias.",
+            # Cuando se libere Vacaciones (hoy sus opciones son solo de superusuario) agregarlo aquí
+            "descripcion": "Evaluaciones de desempeño, empleados, puestos y competencias.",
             "url": "/admin/rh/dashboard/",  # 👈 Apunta al dashboard con menú de RH
             "icono": "groups",
             "solo_superuser": False
@@ -1261,22 +1275,16 @@ def dashboard_modulos_view(request):
     if not request.user.is_superuser:
         modulos = [m for m in modulos if not m["solo_superuser"]]
 
-    # Empresa activa y su logo (mismo criterio que las tablas dinámicas: campo logo o static/img/logo_<id>.png)
+    # Empresa activa y su logo
     empresa_id = request.session.get('empresa_activa') or request.session.get('empresa_id')
     empresa = Empresa.objects.filter(pk=empresa_id).first() if empresa_id else None
-    logo_url = None
-    if empresa and empresa.logo:
-        logo_url = empresa.logo.url
-    elif empresa:
-        ruta = f"img/logo_{str(empresa.pk).strip().lower()}.png"
-        if finders.find(ruta):
-            logo_url = static(ruta)
 
     empleado = Empleado.objects.filter(user=request.user).first()
     return render(request, "admin/dashboard_modulos.html", {
         "modulos": modulos,
         "empresa": empresa,
-        "logo_empresa_url": logo_url,
+        "logo_empresa_url": logo_de_empresa(empresa) if empresa else None,
+        "puede_cambiar_empresa": empresas_permitidas(request.user).count() > 1,
         "nombre_usuario": empleado.nombre_largo if empleado else (request.user.get_full_name() or request.user.username),
         "hoy": timezone.localdate(),
     })

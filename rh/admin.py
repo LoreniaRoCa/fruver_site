@@ -9,12 +9,13 @@ from django.shortcuts import render, redirect
 from django.contrib import messages
 from django import forms
 import openpyxl
-from unfold.admin import ModelAdmin, TabularInline  
+from unfold.admin import ModelAdmin, StackedInline, TabularInline
 from unfold.sites import UnfoldAdminSite  # ⬅️ ¡ESTA ES LA LÍNEA MÁGICA QUE FALTA!
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 from django.db import connection
-from .models import TokenAccesoEvaluacion, Empleado
+from .models import TokenAccesoEvaluacion, Empleado, Empresa
+from core_app.models import AccesoEmpresa
 import uuid
 from django.http import HttpResponse, JsonResponse
 from django.db.models import Q
@@ -218,9 +219,68 @@ except admin.sites.NotRegistered:
 
 # Registramos Usuarios y Grupos para que tu URLconf sepa que existen en /admin/
 # Registramos Usuarios y Grupos para que tu URLconf sepa que existen en tu 'admin_site' personalizado de Unfold
+class AccesoEmpresaInline(StackedInline):
+    """Empresas a las que entra el usuario y sus grupos/permisos en cada una (se suman a los globales)."""
+    model = AccesoEmpresa
+    extra = 0
+    filter_horizontal = ('grupos', 'permisos')
+    fields = ('empresa', 'activo', 'grupos', 'permisos')
+
+
+class CopiarAccesosForm(forms.Form):
+    origen = forms.ModelChoiceField(queryset=Empresa.objects.filter(activa=True), label="Copiar de la empresa")
+    destino = forms.ModelChoiceField(queryset=Empresa.objects.filter(activa=True), label="A la empresa")
+    reemplazar = forms.BooleanField(
+        required=False, label="Reemplazar",
+        help_text="Si se marca, en la empresa destino quedan exactamente los grupos y permisos de la de origen. "
+                  "Si no, se agregan a los que ya tenga.")
+
+    def clean(self):
+        datos = super().clean()
+        if datos.get('origen') and datos.get('origen') == datos.get('destino'):
+            raise forms.ValidationError("La empresa de origen y la de destino deben ser distintas.")
+        return datos
+
+
 @admin.register(User, site=admin_site)  # 🌟 Agregamos 'site=admin_site' para que se vinculen a tu dashboard
 class UserAdmin(BaseUserAdmin, ModelAdmin):
-    pass
+    inlines = [AccesoEmpresaInline]
+    actions = ['copiar_accesos_entre_empresas']
+
+    @admin.action(description="Copiar accesos de una empresa a otra")
+    def copiar_accesos_entre_empresas(self, request, queryset):
+        form = CopiarAccesosForm(request.POST if 'aplicar' in request.POST else None)
+        if 'aplicar' in request.POST and form.is_valid():
+            origen, destino = form.cleaned_data['origen'], form.cleaned_data['destino']
+            copiados, sin_origen = 0, []
+            for usuario in queryset:
+                acceso_origen = AccesoEmpresa.objects.filter(usuario=usuario, empresa=origen).first()
+                if not acceso_origen:
+                    sin_origen.append(usuario.username)
+                    continue
+                acceso_destino, _ = AccesoEmpresa.objects.get_or_create(usuario=usuario, empresa=destino)
+                acceso_destino.activo = acceso_origen.activo
+                acceso_destino.save(update_fields=['activo'])
+                if form.cleaned_data['reemplazar']:
+                    acceso_destino.grupos.set(acceso_origen.grupos.all())
+                    acceso_destino.permisos.set(acceso_origen.permisos.all())
+                else:
+                    acceso_destino.grupos.add(*acceso_origen.grupos.all())
+                    acceso_destino.permisos.add(*acceso_origen.permisos.all())
+                copiados += 1
+            self.message_user(request, f"Accesos copiados de {origen.pk} a {destino.pk} para {copiados} usuario(s).", messages.SUCCESS)
+            if sin_origen:
+                self.message_user(request, f"Sin acceso en {origen.pk} (no se copió nada): {', '.join(sin_origen)}", messages.WARNING)
+            return None
+
+        return render(request, 'admin/copiar_accesos_empresa.html', {
+            **self.admin_site.each_context(request),
+            'title': "Copiar accesos de una empresa a otra",
+            'form': form,
+            'usuarios': queryset,
+            'accion': 'copiar_accesos_entre_empresas',
+            'opts': self.model._meta,
+        })
 
 @admin.register(Group, site=admin_site) # 🌟 Agregamos 'site=admin_site' para que se vinculen a tu dashboard
 class GroupAdmin(BaseGroupAdmin, ModelAdmin):

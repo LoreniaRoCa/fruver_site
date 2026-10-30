@@ -57,6 +57,7 @@ urlpatterns = [
     path('evaluacion/acceso/<uuid:token_uuid>/', views.acceso_magico_view, name='acceso_magico'),
     path('evaluacion/guardar/', views.guardar_evaluacion_view, name='guardar_evaluacion'),
     path('cerrar-sesion/', views.cerrar_sesion_view, name='cerrar_sesion'),
+    path('seleccionar-empresa/', views.seleccionar_empresa_view, name='seleccionar_empresa'),
 
     # Se monta el sitio con un prefijo para incluir todas las rutas internas de los modelos
     #path('admin/site/', admin_site.urls),

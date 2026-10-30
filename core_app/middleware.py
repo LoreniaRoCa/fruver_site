@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.shortcuts import redirect
 from rh.admin import admin_site  # Mantenemos el registro del admin_site personalizado
 from .models import ModuloSistema, OpcionModulo
 
@@ -61,5 +62,34 @@ class NavegacionDinamicaMiddleware:
 
             # Asignar la navegación calculada en tiempo real
             settings.UNFOLD["SIDEBAR"]["navigation"] = navigation_structure
+
+        return self.get_response(request)
+
+class EmpresaActivaMiddleware:
+    """
+    Valida la empresa activa de la sesión contra las empresas permitidas del usuario y la deja en
+    `request.user._empresa_activa` para que PermisosPorEmpresaBackend calcule los permisos de esa empresa.
+    - Si la de la sesión no le corresponde y solo tiene una, la toma automáticamente.
+    - Si tiene varias (o ninguna), lo manda a elegir empresa.
+    Va después de AuthenticationMiddleware y antes de los middlewares que consultan permisos.
+    """
+    RUTAS_EXENTAS = ('/admin/login', '/cerrar-sesion', '/seleccionar-empresa', '/static/', '/media/',
+                     '/cambiar-password-obligatorio', '/evaluacion/acceso/', '/favicon')
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if request.user.is_authenticated:
+            from .empresas import empresas_permitidas
+
+            empresa = request.session.get('empresa_activa') or request.session.get('empresa_id')
+            permitidas = list(empresas_permitidas(request.user).values_list('pk', flat=True))
+            if empresa not in permitidas:
+                empresa = permitidas[0] if len(permitidas) == 1 else None
+                request.session['empresa_id'] = request.session['empresa_activa'] = empresa
+                if empresa is None and not request.path.lower().startswith(self.RUTAS_EXENTAS):
+                    return redirect('seleccionar_empresa')
+            request.user._empresa_activa = empresa
 
         return self.get_response(request)

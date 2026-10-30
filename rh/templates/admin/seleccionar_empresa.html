@@ -1,0 +1,70 @@
+{% load static %}<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Selecciona empresa · SITE FRUVER</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,300..500,0,0">
+    <style>
+        :root { --verde: #72a651; --verde-oscuro: #476b32; --verde-claro: #f2f7f0; --texto: #1e293b; --suave: #64748b;
+                --borde: #e2e8f0; --fondo: #f8fafc; --tarjeta: #ffffff; --rojo: #b91c1c; }
+        @media (prefers-color-scheme: dark) {
+            :root { --texto: #f1f5f9; --suave: #94a3b8; --borde: #334155; --fondo: #0a0a0a; --tarjeta: #171717; --verde-claro: #1a2912; }
+        }
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: "Inter", "Segoe UI", Arial, sans-serif; background: var(--fondo); color: var(--texto); font-size: 14px; }
+        .barra { background: var(--verde-oscuro); color: #fff; padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+        .marca { font-weight: 800; font-size: 17px; letter-spacing: 0.08em; }
+        .barra a { color: #fff; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600;
+                   border: 1px solid rgba(255,255,255,0.35); border-radius: 6px; padding: 6px 10px; }
+        .barra a:hover { background: rgba(255,255,255,0.12); }
+        .barra .material-symbols-outlined { font-size: 18px; }
+        main { max-width: 760px; margin: 0 auto; padding: 40px 16px; }
+        h1 { font-size: 20px; margin: 0 0 4px; }
+        .sub { color: var(--suave); margin: 0 0 20px; }
+        .empresas { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+        .empresa { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; cursor: pointer; font: inherit; color: inherit;
+                   background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 14px 16px;
+                   transition: border-color 0.15s, box-shadow 0.15s; }
+        .empresa:hover, .empresa:focus-visible { border-color: var(--verde); box-shadow: 0 4px 14px rgba(71, 107, 50, 0.12); outline: none; }
+        .empresa.actual { border-color: var(--verde); background: var(--verde-claro); }
+        .logo { flex: none; width: 64px; height: 40px; display: flex; align-items: center; justify-content: center;
+                background: #fff; border: 1px solid var(--borde); border-radius: 6px; overflow: hidden; }
+        .logo img { max-width: 58px; max-height: 34px; }
+        .logo .material-symbols-outlined { color: var(--verde); }
+        .nombre { font-weight: 700; font-size: 13px; }
+        .clave { color: var(--suave); font-size: 12px; margin-top: 2px; }
+        .aviso { padding: 16px; border-radius: 10px; border: 1px solid var(--borde); background: var(--tarjeta); color: var(--suave); }
+        .error { color: var(--rojo); margin-bottom: 12px; }
+    </style>
+</head>
+<body>
+    <header class="barra">
+        <span class="marca">SITE FRUVER</span>
+        <a href="{% url 'cerrar_sesion' %}"><span class="material-symbols-outlined">logout</span>Salir</a>
+    </header>
+    <main>
+        <h1>Hola, {{ nombre_usuario }}</h1>
+        {% for message in messages %}<p class="error">{{ message }}</p>{% endfor %}
+        {% if empresas %}
+        <p class="sub">Selecciona la empresa con la que vas a trabajar.</p>
+        <form method="post" class="empresas">
+            {% csrf_token %}
+            {% for item in empresas %}
+            <button type="submit" name="empresa_id" value="{{ item.empresa.pk }}" class="empresa{% if item.actual %} actual{% endif %}">
+                <span class="logo">
+                    {% if item.logo %}<img src="{{ item.logo }}" alt="">{% else %}<span class="material-symbols-outlined">apartment</span>{% endif %}
+                </span>
+                <span>
+                    <div class="nombre">{{ item.empresa.nombre }}</div>
+                    <div class="clave">{{ item.empresa.pk }}{% if item.actual %} · actual{% endif %}</div>
+                </span>
+            </button>
+            {% endfor %}
+        </form>
+        {% else %}
+        <p class="aviso">No tienes empresas asignadas. Contacta al administrador del sistema para que te dé acceso.</p>
+        {% endif %}
+    </main>
+</body>
+</html>

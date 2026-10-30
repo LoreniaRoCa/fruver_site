@@ -1,5 +1,6 @@
 from django.db import models
-from django.contrib.auth.models import Permission
+from django.conf import settings
+from django.contrib.auth.models import Group, Permission
 
 class ModuloSistema(models.Model):
     nombre = models.CharField(max_length=100, verbose_name="Nombre del Módulo") # Ej: "Recursos Humanos", "Tablas Dinámicas"
@@ -51,3 +52,25 @@ class OpcionModulo(models.Model):
 
     def __str__(self):
         return f"{self.modulo.nombre} -> {self.titulo}"
+
+class AccesoEmpresa(models.Model):
+    """
+    A qué empresas puede entrar un usuario y con qué grupos/permisos en cada una.
+    Los grupos y permisos globales del usuario (los de Django) siguen valiendo en todas sus empresas;
+    los de aquí se suman solo cuando la empresa activa de la sesión es esta.
+    """
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='accesos_empresa')
+    empresa = models.ForeignKey('rh.Empresa', on_delete=models.CASCADE, related_name='accesos_usuario', db_column='empresa')
+    grupos = models.ManyToManyField(Group, blank=True, related_name='accesos_empresa', verbose_name="Grupos (roles) en esta empresa")
+    permisos = models.ManyToManyField(Permission, blank=True, related_name='accesos_empresa', verbose_name="Permisos adicionales en esta empresa")
+    activo = models.BooleanField(default=True, verbose_name="¿Acceso activo?")
+
+    class Meta:
+        db_table = 'core_acceso_empresa'
+        verbose_name = "Acceso por empresa"
+        verbose_name_plural = "Accesos por empresa"
+        unique_together = ('usuario', 'empresa')
+        ordering = ['empresa']
+
+    def __str__(self):
+        return f"{self.usuario} -> {self.empresa_id}"

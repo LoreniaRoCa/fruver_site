@@ -24,7 +24,7 @@
                  background: var(--verde-oscuro); color: #fff; }
     /* "SITE FRUVER" arriba y, debajo, el logo y nombre de la empresa activa */
     .erp-identidad { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-    .erp-marca { font-weight: 800; font-size: 17px; letter-spacing: 0.08em; line-height: 1.1; }
+    .erp-marca { font-weight: 800; font-size: 17px; letter-spacing: 0.08em; line-height: 1.1; white-space: nowrap; }
     .erp-empresa { display: flex; align-items: center; gap: 6px; font-size: 12px; opacity: 0.95; min-width: 0; }
     .erp-empresa img { height: 20px; width: auto; background: #fff; border-radius: 3px; padding: 1px 3px; }
     .erp-empresa span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -64,7 +64,8 @@
 
     @media (max-width: 640px) {
         .erp-barra { padding: 0 16px; }
-        .erp-usuario .fecha, .erp-usuario .nombre { display: none; }
+        .erp-usuario .fecha, .erp-usuario .nombre, .erp-salir .texto { display: none; }
+        .erp-usuario { gap: 8px; }
         .erp-contenido { padding: 16px; }
         .erp-buscar { width: 100%; }
     }
@@ -84,8 +85,13 @@
         <div class="erp-usuario">
             <span class="fecha">{{ hoy|date:"l j \d\e F \d\e Y"|capfirst }}</span>
             <span class="nombre">{{ nombre_usuario }}</span>
+            {% if puede_cambiar_empresa %}
+            <a class="erp-salir" href="{% url 'seleccionar_empresa' %}" title="Trabajar con otra de tus empresas">
+                <span class="material-symbols-outlined">swap_horiz</span><span class="texto">Cambiar empresa</span>
+            </a>
+            {% endif %}
             <a class="erp-salir" href="{% url 'cerrar_sesion' %}" title="Cerrar sesión">
-                <span class="material-symbols-outlined">logout</span>Salir
+                <span class="material-symbols-outlined">logout</span><span class="texto">Salir</span>
             </a>
         </div>
     </header>

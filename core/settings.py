@@ -79,6 +79,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # Empresa activa de la sesión (debe ir antes de lo que consulta permisos)
+    'core_app.middleware.EmpresaActivaMiddleware',
     # 🟢 Tu nuevo middleware de restricción de menú:
     'core_app.middleware.NavegacionDinamicaMiddleware',    
     #'rh.middleware.RestringirAccesoAdminMiddleware',
@@ -167,6 +169,12 @@ STATICFILES_FINDERS = [
 ]
 
 LOGIN_URL = '/admin/login/'
+
+# ModelBackend autentica y da los permisos globales; PermisosPorEmpresaBackend suma los de la empresa activa
+AUTHENTICATION_BACKENDS = [
+    'django.contrib.auth.backends.ModelBackend',
+    'core_app.empresas.PermisosPorEmpresaBackend',
+]
 
 # Redirecciones tras autenticación
 #LOGIN_REDIRECT_URL = '/admin/'  # O la ruta principal de tu sistema

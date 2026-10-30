@@ -1,0 +1,30 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<div style="max-width: 640px; padding: 8px 0;">
+    <h1 style="font-size: 18px; font-weight: 700; margin: 0 0 6px;">Copiar accesos de una empresa a otra</h1>
+    <p style="margin: 0 0 16px;" class="text-gray-500 dark:text-zinc-400">
+        Se copian los grupos y permisos que cada usuario tiene en la empresa de origen a la empresa destino.
+        Usuarios seleccionados ({{ usuarios|length }}):
+        {% for u in usuarios %}<strong>{{ u.username }}</strong>{% if not forloop.last %}, {% endif %}{% endfor %}
+    </p>
+    <form method="post">
+        {% csrf_token %}
+        {% for u in usuarios %}<input type="hidden" name="_selected_action" value="{{ u.pk }}">{% endfor %}
+        <input type="hidden" name="action" value="{{ accion }}">
+        <input type="hidden" name="aplicar" value="1">
+        {% if form.non_field_errors %}<p style="color:#b91c1c; margin: 0 0 12px;">{{ form.non_field_errors|join:" " }}</p>{% endif %}
+        {% for campo in form %}
+        <div style="margin-bottom: 14px;">
+            <label for="{{ campo.id_for_label }}" style="display:block; font-weight:600; margin-bottom:4px;">{{ campo.label }}</label>
+            {{ campo }}
+            {% if campo.help_text %}<div style="font-size:12px; margin-top:4px;" class="text-gray-500 dark:text-zinc-400">{{ campo.help_text }}</div>{% endif %}
+            {% if campo.errors %}<div style="color:#b91c1c; font-size:12px;">{{ campo.errors|join:" " }}</div>{% endif %}
+        </div>
+        {% endfor %}
+        <div style="display:flex; gap:8px;">
+            <button type="submit" style="background:#72a651; color:#fff; border:0; border-radius:6px; padding:8px 16px; font-weight:600; cursor:pointer;">Copiar accesos</button>
+            <a href="" style="border:1px solid #cbd5e1; border-radius:6px; padding:8px 16px; text-decoration:none;" class="text-gray-700 dark:text-zinc-200">Cancelar</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
