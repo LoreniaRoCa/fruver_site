@@ -32,6 +32,8 @@ from .models import (
 )
 from django.db import connection
 from django.utils import timezone
+from django.contrib.staticfiles import finders
+from django.templatetags.static import static
 
 class CustomAdminLoginView(LoginView):
     template_name = "admin/login.html"
@@ -1231,23 +1233,27 @@ def probar_correo_view(request):
 # rh/views.py
 @login_required
 def dashboard_modulos_view(request):
+    # icono: nombre de Material Symbols (https://fonts.google.com/icons)
     modulos = [
         {
             "titulo": "Recursos Humanos",
-            "descripcion": "Gestión de evaluaciones de desempeño, empleados, puestos y competencias.",
+            "descripcion": "Evaluaciones de desempeño, vacaciones, empleados, puestos y competencias.",
             "url": "/admin/rh/dashboard/",  # 👈 Apunta al dashboard con menú de RH
+            "icono": "groups",
             "solo_superuser": False
         },
         {
             "titulo": "Tablas Dinámicas",
             "descripcion": "Análisis interactivo de información y reportes ejecutivos.",
             "url": "/reportes/tablas/",
+            "icono": "bar_chart",
             "solo_superuser": False
         },
         {
             "titulo": "Seguridad del Sitio",
-            "descripcion": "Administración de usuarios, grupos de acceso y permisos del sistema.",
+            "descripcion": "Usuarios, grupos de acceso y permisos del sistema.",
             "url": "/admin/auth/user/",
+            "icono": "admin_panel_settings",
             "solo_superuser": True
         },
     ]
@@ -1255,7 +1261,25 @@ def dashboard_modulos_view(request):
     if not request.user.is_superuser:
         modulos = [m for m in modulos if not m["solo_superuser"]]
 
-    return render(request, "admin/dashboard_modulos.html", {"modulos": modulos})
+    # Empresa activa y su logo (mismo criterio que las tablas dinámicas: campo logo o static/img/logo_<id>.png)
+    empresa_id = request.session.get('empresa_activa') or request.session.get('empresa_id')
+    empresa = Empresa.objects.filter(pk=empresa_id).first() if empresa_id else None
+    logo_url = None
+    if empresa and empresa.logo:
+        logo_url = empresa.logo.url
+    elif empresa:
+        ruta = f"img/logo_{str(empresa.pk).strip().lower()}.png"
+        if finders.find(ruta):
+            logo_url = static(ruta)
+
+    empleado = Empleado.objects.filter(user=request.user).first()
+    return render(request, "admin/dashboard_modulos.html", {
+        "modulos": modulos,
+        "empresa": empresa,
+        "logo_empresa_url": logo_url,
+        "nombre_usuario": empleado.nombre_largo if empleado else (request.user.get_full_name() or request.user.username),
+        "hoy": timezone.localdate(),
+    })
 
 @login_required
 def cambiar_password_obligatorio(request):

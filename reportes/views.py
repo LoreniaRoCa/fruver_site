@@ -103,19 +103,24 @@ def reporte_dinamico_view(request, slug):
                 else:
                     logo_empresa_url = static("img/logo.png")
 
-    # Captura de parámetros desde GET
+    # Plantilla con la que abre la página: la pedida en ?plantilla= (p. ej. después de guardar),
+    # si no la que el usuario marcó como predeterminada, y si no el formato base (id 0)
+    plantillas_del_usuario = PlantillaPivotUsuario.objects.filter(reporte_base_id=reporte.id_reporte, usuario=request.user)
+    plantilla_pedida = request.GET.get('plantilla', '')
+    plantilla_inicial = None
+    if plantilla_pedida.isdigit():
+        plantilla_inicial = plantillas_del_usuario.filter(pk=int(plantilla_pedida)).first()
+    elif plantilla_pedida != '0':
+        plantilla_inicial = plantillas_del_usuario.filter(es_default=True).first()
+
+    # Captura de parámetros desde GET (si no vienen, las macros de la plantilla inicial o del reporte)
     fecha_inicio_raw = request.GET.get('fecha_inicio')
     fecha_fin_raw = request.GET.get('fecha_fin')
+    macro_inicio = (plantilla_inicial and plantilla_inicial.fecha_inicio_macro) or reporte.fecha_inicio_macro or "-3m"
+    macro_fin = (plantilla_inicial and plantilla_inicial.fecha_fin_macro) or reporte.fecha_fin_macro or "m"
 
-    if fecha_inicio_raw:
-        fecha_inicio_val = resolver_macro_fecha(fecha_inicio_raw)
-    else:
-        fecha_inicio_val = resolver_macro_fecha(reporte.fecha_inicio_macro or "-3m")
-
-    if fecha_fin_raw:
-        fecha_fin_val = resolver_macro_fecha(fecha_fin_raw)
-    else:
-        fecha_fin_val = resolver_macro_fecha(reporte.fecha_fin_macro or "m")
+    fecha_inicio_val = resolver_macro_fecha(fecha_inicio_raw or macro_inicio)
+    fecha_fin_val = resolver_macro_fecha(fecha_fin_raw or macro_fin)
 
     datos = []
     with connection.cursor() as cursor:
@@ -156,10 +161,8 @@ def reporte_dinamico_view(request, slug):
                 'nombre_empresa': nombre_empresa,
                 'logo_empresa_url': logo_empresa_url
             })
-    plantillas_qs = PlantillaPivotUsuario.objects.filter(
-        reporte_base_id=reporte.id_reporte,
-        usuario=request.user
-    ).values('id', 'nombre_plantilla', 'configuracion_pivot', 'fecha_inicio_macro', 'fecha_fin_macro', 'es_default')
+    plantillas_qs = plantillas_del_usuario.order_by('nombre_plantilla').values(
+        'id', 'nombre_plantilla', 'configuracion_pivot', 'fecha_inicio_macro', 'fecha_fin_macro', 'es_default')
 
     plantillas_usuario_list = []
     for item in plantillas_qs:
@@ -186,6 +189,7 @@ def reporte_dinamico_view(request, slug):
         'datos_json': datos,
         'configuracion_pivot': reporte.configuracion_pivot or [],
         'plantillas_usuario': lista_plantillas,
+        'plantilla_inicial_id': plantilla_inicial.id if plantilla_inicial else 0,
         'reporte_id': reporte.id_reporte,
         'fecha_inicio_actual': fecha_inicio_val.isoformat(),
         'fecha_fin_actual': fecha_fin_val.isoformat(),
@@ -246,3 +250,54 @@ def guardar_plantilla_pivot(request):
         })
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+def _plantilla_del_usuario(request, data):
+    """Plantilla propia del usuario sobre un reporte que puede ver; None si no existe o no es suya."""
+    reporte = Pivot_Dinamico.objects.filter(pk=data.get('reporte_id'), activo=True).first()
+    if not reporte or not usuario_puede_ver_reporte(request.user, reporte):
+        return reporte, None
+    plantilla = PlantillaPivotUsuario.objects.filter(
+        pk=data.get('plantilla_id'), reporte_base=reporte, usuario=request.user
+    ).first()
+    return reporte, plantilla
+
+
+@login_required
+@require_POST
+def eliminar_plantilla_pivot(request):
+    try:
+        data = json.loads(request.body)
+    except ValueError:
+        return JsonResponse({'status': 'error', 'message': 'Solicitud inválida'}, status=400)
+
+    _, plantilla = _plantilla_del_usuario(request, data)
+    if not plantilla:
+        # El formato base (id 0) y las plantillas de otros usuarios no se pueden eliminar
+        return JsonResponse({'status': 'error', 'message': 'No se encontró la plantilla o no es suya'}, status=404)
+
+    nombre = plantilla.nombre_plantilla
+    plantilla.delete()
+    return JsonResponse({'status': 'success', 'message': f"Plantilla '{nombre}' eliminada"})
+
+
+@login_required
+@require_POST
+def predeterminar_plantilla_pivot(request):
+    """Marca la plantilla con la que abre el reporte para este usuario. plantilla_id 0 = formato base."""
+    try:
+        data = json.loads(request.body)
+    except ValueError:
+        return JsonResponse({'status': 'error', 'message': 'Solicitud inválida'}, status=400)
+
+    reporte, plantilla = _plantilla_del_usuario(request, data)
+    if not reporte or not usuario_puede_ver_reporte(request.user, reporte):
+        return JsonResponse({'status': 'error', 'message': 'No tiene permiso sobre este reporte'}, status=403)
+    if str(data.get('plantilla_id')) != '0' and not plantilla:
+        return JsonResponse({'status': 'error', 'message': 'No se encontró la plantilla o no es suya'}, status=404)
+
+    # Solo una predeterminada por usuario y reporte
+    PlantillaPivotUsuario.objects.filter(reporte_base=reporte, usuario=request.user, es_default=True).update(es_default=False)
+    if plantilla:
+        plantilla.es_default = True
+        plantilla.save(update_fields=['es_default'])
+    return JsonResponse({'status': 'success', 'plantilla_id': plantilla.id if plantilla else 0})

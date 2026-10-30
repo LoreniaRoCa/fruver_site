@@ -31,6 +31,13 @@
 {% endblock %}
 
 {% block content %}
+{% if not mostrar_tablero %}
+{# Sin permiso de "Consolidado Resultados": solo una bienvenida al módulo #}
+<div style="max-width: 720px; margin: 48px auto; padding: 0 16px; text-align: center;">
+    <h1 style="font-size: 20px; font-weight: 700; margin: 0 0 6px;" class="text-gray-900 dark:text-white">Recursos Humanos</h1>
+    <p style="font-size: 14px; margin: 0;" class="text-gray-500 dark:text-zinc-400">Selecciona una opción del menú de la izquierda.</p>
+</div>
+{% else %}
 <div class="p-4 space-y-8 max-w-7xl mx-auto md:p-6 lg:p-8 text-slate-800 dark:text-neutral-200">
     <!--
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-gray-200 dark:border-zinc-800 pb-4 gap-4">
@@ -201,4 +208,5 @@
         });
     });
 </script>
+{% endif %}
 {% endblock %}

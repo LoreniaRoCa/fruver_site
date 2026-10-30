@@ -68,7 +68,13 @@ class CustomAdminSite(UnfoldAdminSite):
         empresa_activa = request.session.get('empresa_activa') or request.session.get('empresa_id')
         
         extra_context = extra_context or {}
-        
+
+        # El tablero de avance de evaluaciones solo lo ve quien tiene acceso a "Consolidado Resultados"
+        puede_ver_tablero = request.user.is_superuser or request.user.has_perm('rh.ver_consolidado_resultados')
+        extra_context["mostrar_tablero"] = puede_ver_tablero
+        if not puede_ver_tablero:
+            return super().index(request, extra_context=extra_context)
+
         departamentos_dict = {}
         jefes_dict = {} 
         

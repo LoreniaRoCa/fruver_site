@@ -1,0 +1,307 @@
+[
+ {
+  "area": "row",
+  "caption": "Producto",
+  "dataField": "NombreCultivo"
+ },
+ {
+  "area": "data",
+  "format": "$#,##0.00",
+  "caption": "Venta",
+  "dataField": "VentaBruta",
+  "summaryType": "sum"
+ },
+ {
+  "area": "data",
+  "format": "#,##0.00",
+  "caption": "Cantidad",
+  "dataField": "Cantidad",
+  "summaryType": "sum"
+ },
+ {
+  "area": "data",
+  "format": "#,##0.00",
+  "caption": "Recibido",
+  "dataField": "Recibido",
+  "summaryType": "sum"
+ },
+ {
+  "area": "data",
+  "format": "$#,##0.00",
+  "caption": "Diferencia Kg",
+  "dataField": "DiferenciaKilos",
+  "summaryType": "sum"
+ },
+ {
+  "area": "data",
+  "format": "$#,##0.00",
+  "caption": "Diferencia Precio",
+  "dataField": "DifPrecio",
+  "summaryType": "sum"
+ },
+ {
+  "area": "data",
+  "format": "$#,##0.00",
+  "caption": "Porc Merma",
+  "dataField": "PorcMerma",
+  "summaryType": "sum"
+ },
+ {
+  "area": "data",
+  "format": "$#,##0.00",
+  "caption": "Bonif Venta",
+  "dataField": "Bonificaciones",
+  "summaryType": "sum"
+ },
+ {
+  "area": "data",
+  "format": "$#,##0.00",
+  "caption": "Bonif Merma",
+  "dataField": "bonifmerma",
+  "summaryType": "sum"
+ },
+ {
+  "area": "data",
+  "format": "$#,##0.00",
+  "caption": "Descuentos Com",
+  "dataField": "DecuentosComerciales",
+  "summaryType": "sum"
+ },
+ {
+  "area": "data",
+  "format": "$#,##0.00",
+  "caption": "Nota de Cargo",
+  "dataField": "NotaCargo",
+  "summaryType": "sum"
+ },
+ {
+  "area": "data",
+  "format": "$#,##0.00",
+  "caption": "Nota Cargo Liq",
+  "dataField": "NotaCargoLiq",
+  "summaryType": "sum"
+ },
+ {
+  "area": "data",
+  "format": "$#,##0.00",
+  "caption": "Venta Neta",
+  "dataField": "VentaNeta",
+  "summaryType": "sum"
+ },
+ {
+  "area": "filter",
+  "caption": "Cliente",
+  "dataField": "Cliente"
+ },
+ {
+  "area": "filter",
+  "caption": "Empresa",
+  "dataField": "Empresa"
+ },
+ {
+  "area": "filter",
+  "caption": "Fecha Fac",
+  "dataType": "date",
+  "dataField": "FechaFac"
+ },
+ {
+  "area": "filter",
+  "caption": "Fecha Recibo",
+  "dataType": "date",
+  "dataField": "FechaRecibo"
+ },
+ {
+  "area": "filter",
+  "caption": "Grupo Cliente",
+  "dataField": "GrupoCliente"
+ },
+ {
+  "area": "filter",
+  "caption": "Presentación",
+  "dataField": "NombrePresentacion"
+ },
+ {
+  "area": "filter",
+  "caption": "Viaje",
+  "dataField": "viaje"
+ },
+ {
+  "area": "filter",
+  "caption": "Recepción",
+  "dataField": "Recepcion"
+ },
+ {
+  "area": "filter",
+  "caption": "Factura",
+  "dataField": "Factura"
+ },
+ {
+  "area": "filter",
+  "caption": "Proveedor",
+  "dataField": "Proveedor"
+ },
+ {
+  "area": "filter",
+  "caption": "Referencia",
+  "dataField": "Referencia"
+ },
+ {
+  "area": "filter",
+  "caption": "Tipo Compra",
+  "dataField": "TipoCompra"
+ },
+ {
+  "area": "filter",
+  "caption": "Vendedor",
+  "dataField": "Vendedor"
+ },
+ {
+  "area": "filter",
+  "caption": "Unidad",
+  "dataField": "Unidad"
+ },
+ {
+  "area": "filter",
+  "caption": "Moneda",
+  "dataField": "Moneda"
+ },
+ {
+  "area": "filter",
+  "caption": "Origen",
+  "dataField": "PaisOrigen"
+ },
+ {
+  "area": "filter",
+  "caption": "Ejercicio",
+  "dataField": "Ejercicio"
+ },
+ {
+  "area": "filter",
+  "caption": "Mes",
+  "dataField": "Mes"
+ },
+ {
+  "format": "$#,##0.00",
+  "caption": "Comisión",
+  "dataField": "Comision",
+  "summaryType": "sum"
+ },
+ {
+  "format": "$#,##0.00",
+  "caption": "Utilidad",
+  "dataField": "Utilidad",
+  "summaryType": "sum"
+ },
+ {
+  "format": "$#,##0.00",
+  "caption": "Flete",
+  "dataField": "flete",
+  "summaryType": "sum"
+ },
+ {
+  "format": "$#,##0.00",
+  "caption": "Protección",
+  "dataField": "Proteccion",
+  "summaryType": "sum"
+ },
+ {
+  "format": "$#,##0.00",
+  "caption": "Coaseguro",
+  "dataField": "coaseguro",
+  "summaryType": "sum"
+ },
+ {
+  "format": "$#,##0.00",
+  "caption": "Costo Compra",
+  "dataField": "CostoCompra",
+  "summaryType": "sum"
+ },
+ {
+  "format": "$#,##0.00",
+  "caption": "Importe a Pagar",
+  "dataField": "ImporteAPagarProductor",
+  "summaryType": "sum"
+ },
+ {
+  "format": "$#,##0.00",
+  "caption": "Gastos",
+  "dataField": "ImporteGastos",
+  "summaryType": "sum"
+ },
+ {
+  "format": "$#,##0.00",
+  "caption": "Venta Bruta",
+  "dataField": "VentaBrutaMenosKilos",
+  "summaryType": "sum"
+ },
+ {
+  "format": "$#,##0.00",
+  "caption": "Venta Neta menos Flete",
+  "dataField": "VentaNetaMenosFlete",
+  "summaryType": "sum"
+ },
+ {
+  "format": "$#,##0.00",
+  "caption": "Venta Protegida",
+  "dataField": "ventaprotegida",
+  "summaryType": "sum"
+ },
+ {
+  "caption": "Ubicación Cliente",
+  "dataField": "UbicacionCli"
+ },
+ {
+  "caption": "Tipo Cambio",
+  "dataField": "TipoCambio"
+ },
+ {
+  "caption": "Cultivo",
+  "dataField": "NombreCultivoInventum"
+ },
+ {
+  "format": "$#,##0.00",
+  "caption": "Nota Cargo Liq Dlls",
+  "dataField": "NCLDlls",
+  "summaryType": "sum"
+ },
+ {
+  "format": "$#,##0.00",
+  "caption": "VentaDlls",
+  "dataField": "VentaDlls",
+  "summaryType": "sum"
+ },
+ {
+  "format": "$#,##0.00",
+  "caption": "Gastos Costo",
+  "dataField": "GastosCosto",
+  "summaryType": "sum"
+ },
+ {
+  "format": "$#,##0.00",
+  "caption": "Costo Venta",
+  "dataField": "CostoVenta",
+  "summaryType": "sum"
+ },
+ {
+  "format": {
+   "type": "percent",
+   "precision": 2
+  },
+  "caption": "% Utilidad",
+  "cociente": {
+   "numerador": "Utilidad",
+   "denominador": "VentaNeta"
+  }
+ },
+ {
+  "name": "PorcVenta",
+  "format": {
+   "type": "percent",
+   "precision": 2
+  },
+  "caption": "% Venta",
+  "dataField": "VentaNeta",
+  "summaryType": "sum",
+  "summaryDisplayMode": "percentOfColumnTotal"
+ }
+]

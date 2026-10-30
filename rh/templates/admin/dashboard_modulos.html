@@ -1,70 +1,137 @@
 {% extends "unfold/layouts/base_simple.html" %}
 {% load i18n static %}
 
+{% block title %}SITE FRUVER{% endblock %}
+
 {% block content %}
-<div style="min-height: 80vh; background-color: #ffffff;"
-     class="flex flex-col justify-center items-center py-12 px-4 font-sans">
-        
-        <!-- ENCABEZADO -->
-        <div class="space-y-2">
-            <h1 class="text-3xl font-medium text-gray-900 tracking-tight">
-                Bienvenido al Portal Empresarial
-            </h1>
-            <p class="text-sm text-gray-500">
-                Selecciona un módulo para acceder a sus funciones y herramientas.
-            </p>
-        </div>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,300..500,0,0">
+<style>
+    /* Esta página ocupa todo el ancho: se quitan el ancho máximo y los márgenes del contenedor de Unfold
+       (estos estilos solo se cargan aquí) */
+    #main > .px-4 { padding-left: 0 !important; padding-right: 0 !important; }
+    #main > .border-b.mb-6 { display: none !important; }  /* encabezado vacío de Unfold: esta página trae el suyo */
+    #content.container { max-width: none !important; margin: 0 !important; padding: 0 !important; }
 
-        <!-- TARJETAS DE MÓDULOS -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-left pt-2">
-            {% for modulo in modulos %}
-            <div style="border-radius: 16px; border: 1px solid #f0f0f0; box-shadow: 0 4px 20px rgba(0,0,0,0.03);" 
-                 class="bg-white p-7 flex flex-col justify-between h-[320px] transition-all hover:shadow-md">
-                
-                <div class="space-y-5">
-                    <!-- CONTENEDOR DEL ÍCONO (VERDE PISTACHE SUAVE) -->
-                    <div style="background-color: #f2f7f0; border-radius: 16px;" 
-                         class="w-16 h-16 flex items-center justify-center">
-                        {% if forloop.counter == 1 %}
-                        <!-- Ícono Recursos Humanos -->
-                        <svg class="w-8 h-8" style="color: #72a651;" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
-                        </svg>
-                        {% elif forloop.counter == 2 %}
-                        <!-- Ícono Tablas Dinámicas -->
-                        <svg class="w-8 h-8" style="color: #72a651;" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                        </svg>
-                        {% else %}
-                        <!-- Ícono Seguridad del Sitio -->
-                        <svg class="w-8 h-8" style="color: #72a651;" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
-                        </svg>
-                        {% endif %}
-                    </div>
+    /* Colores del sitio (UNFOLD["COLORS"]["primary"] en settings.py) */
+    .erp { --verde: #72a651; --verde-oscuro: #476b32; --verde-claro: #f2f7f0; --verde-borde: #cfe7c2;
+           --texto: #1e293b; --suave: #64748b; --borde: #e2e8f0; --fondo: #f8fafc; --tarjeta: #ffffff;
+           color: var(--texto); font-size: 14px; min-height: 100vh; background: var(--fondo); }
+    html.dark .erp { --texto: #f1f5f9; --suave: #94a3b8; --borde: #334155; --fondo: #0a0a0a; --tarjeta: #171717;
+                     --verde-claro: #1a2912; --verde-borde: #314925; }
 
-                    <!-- TÍTULO Y DESCRIPCIÓN -->
-                    <div class="space-y-2">
-                        <h3 class="text-base font-bold text-gray-900">
-                            {{ modulo.titulo }}
-                        </h3>
-                        <p class="text-xs text-gray-500 leading-relaxed">
-                            {{ modulo.descripcion }}
-                        </p>
-                    </div>
-                </div>
+    /* Barra superior */
+    .erp-barra { display: flex; align-items: center; gap: 16px; padding: 8px 24px; min-height: 68px;
+                 background: var(--verde-oscuro); color: #fff; }
+    /* "SITE FRUVER" arriba y, debajo, el logo y nombre de la empresa activa */
+    .erp-identidad { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+    .erp-marca { font-weight: 800; font-size: 17px; letter-spacing: 0.08em; line-height: 1.1; }
+    .erp-empresa { display: flex; align-items: center; gap: 6px; font-size: 12px; opacity: 0.95; min-width: 0; }
+    .erp-empresa img { height: 20px; width: auto; background: #fff; border-radius: 3px; padding: 1px 3px; }
+    .erp-empresa span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .erp-usuario { margin-left: auto; display: flex; align-items: center; gap: 14px; font-size: 13px; white-space: nowrap; }
+    .erp-usuario .nombre { font-weight: 600; }
+    .erp-usuario .fecha { opacity: 0.8; }
+    .erp-salir { display: inline-flex; align-items: center; gap: 4px; color: #fff; text-decoration: none; padding: 6px 10px;
+                 border: 1px solid rgba(255,255,255,0.35); border-radius: 6px; font-weight: 600; font-size: 12px; }
+    .erp-salir:hover { background: rgba(255,255,255,0.12); }
+    .erp-salir .material-symbols-outlined { font-size: 18px; }
 
-                <!-- SEPARADOR Y ENLACE -->
-                <div style="border-top: 1px solid #f4f4f5;" class="pt-4 text-right">
-                    <a href="{{ modulo.url }}" style="color: #72a651;" class="inline-flex items-center text-xs font-semibold hover:underline gap-1">
-                        Acceder al módulo &rarr;
-                    </a>
-                </div>
+    /* Contenido */
+    .erp-contenido { max-width: 1200px; margin: 0 auto; padding: 24px; }
+    .erp-titulo { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+    .erp-titulo h1 { margin: 0; font-size: 20px; font-weight: 700; }
+    .erp-titulo p { margin: 2px 0 0; color: var(--suave); font-size: 13px; }
+    .erp-buscar { display: flex; align-items: center; gap: 6px; background: var(--tarjeta); border: 1px solid var(--borde);
+                  border-radius: 8px; padding: 6px 10px; width: 260px; max-width: 100%; }
+    .erp-buscar input { border: 0; outline: 0; background: transparent; color: var(--texto); width: 100%; font-size: 13px; }
+    .erp-buscar .material-symbols-outlined { font-size: 18px; color: var(--suave); }
 
+    /* Mosaico de módulos: compacto, crece hacia abajo conforme se agregan */
+    .erp-modulos { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+    .erp-modulo { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; background: var(--tarjeta);
+                  border: 1px solid var(--borde); border-radius: 10px; text-decoration: none; color: inherit;
+                  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s; }
+    .erp-modulo:hover { border-color: var(--verde); box-shadow: 0 4px 14px rgba(71, 107, 50, 0.12); transform: translateY(-1px); }
+    .erp-modulo:focus-visible { outline: 2px solid var(--verde); outline-offset: 2px; }
+    .erp-icono { flex: none; width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+                 background: var(--verde-claro); color: var(--verde); border: 1px solid var(--verde-borde); }
+    .erp-icono .material-symbols-outlined { font-size: 22px; }
+    .erp-modulo h3 { margin: 0; font-size: 14px; font-weight: 700; }
+    .erp-modulo p { margin: 3px 0 0; font-size: 12px; color: var(--suave); line-height: 1.4; }
+    .erp-modulo .flecha { margin-left: auto; align-self: center; color: var(--suave); font-size: 18px; }
+    .erp-modulo:hover .flecha { color: var(--verde); }
+    .erp-vacio { display: none; padding: 24px; text-align: center; color: var(--suave); }
+
+    @media (max-width: 640px) {
+        .erp-barra { padding: 0 16px; }
+        .erp-usuario .fecha, .erp-usuario .nombre { display: none; }
+        .erp-contenido { padding: 16px; }
+        .erp-buscar { width: 100%; }
+    }
+</style>
+
+<div class="erp">
+    <header class="erp-barra">
+        <div class="erp-identidad">
+            <div class="erp-marca">SITE FRUVER</div>
+            {% if empresa %}
+            <div class="erp-empresa">
+                {% if logo_empresa_url %}<img src="{{ logo_empresa_url }}" alt="">{% endif %}
+                <span>{{ empresa.nombre }}</span>
             </div>
-            {% endfor %}
+            {% endif %}
+        </div>
+        <div class="erp-usuario">
+            <span class="fecha">{{ hoy|date:"l j \d\e F \d\e Y"|capfirst }}</span>
+            <span class="nombre">{{ nombre_usuario }}</span>
+            <a class="erp-salir" href="{% url 'cerrar_sesion' %}" title="Cerrar sesión">
+                <span class="material-symbols-outlined">logout</span>Salir
+            </a>
+        </div>
+    </header>
+
+    <main class="erp-contenido">
+        <div class="erp-titulo">
+            <div>
+                <h1>Módulos</h1>
+                <p>Selecciona un módulo para entrar.</p>
+            </div>
+            <label class="erp-buscar">
+                <span class="material-symbols-outlined">search</span>
+                <input type="search" id="buscar-modulo" placeholder="Buscar módulo..." autocomplete="off">
+            </label>
         </div>
 
-    </div>
+        <nav class="erp-modulos" id="modulos">
+            {% for modulo in modulos %}
+            <a class="erp-modulo" href="{{ modulo.url }}" data-buscar="{{ modulo.titulo|lower }} {{ modulo.descripcion|lower }}">
+                <span class="erp-icono"><span class="material-symbols-outlined">{{ modulo.icono }}</span></span>
+                <span>
+                    <h3>{{ modulo.titulo }}</h3>
+                    <p>{{ modulo.descripcion }}</p>
+                </span>
+                <span class="material-symbols-outlined flecha">chevron_right</span>
+            </a>
+            {% endfor %}
+        </nav>
+        <div class="erp-vacio" id="sin-modulos">No hay módulos que coincidan con la búsqueda.</div>
+    </main>
 </div>
+
+<script>
+    (function () {
+        var quitarAcentos = function (t) { return t.normalize("NFD").replace(/[̀-ͯ]/g, ""); };
+        var modulos = document.querySelectorAll("#modulos .erp-modulo");
+        document.getElementById("buscar-modulo").addEventListener("input", function () {
+            var texto = quitarAcentos(this.value.trim().toLowerCase());
+            var visibles = 0;
+            modulos.forEach(function (m) {
+                var ok = !texto || quitarAcentos(m.dataset.buscar).indexOf(texto) !== -1;
+                m.style.display = ok ? "" : "none";
+                if (ok) visibles++;
+            });
+            document.getElementById("sin-modulos").style.display = visibles ? "none" : "block";
+        });
+    })();
+</script>
 {% endblock %}

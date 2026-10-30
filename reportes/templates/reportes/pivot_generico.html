@@ -238,6 +238,16 @@
                         <span>Guardar</span>
                     </button>
 
+                    <button type="button" id="btn-eliminar-win" class="btn-toolbar-win" title="Eliminar la plantilla actual">
+                        <i class="dx-icon-trash text-red-600"></i>
+                        <span>Eliminar</span>
+                    </button>
+
+                    <button type="button" id="btn-predeterminar-win" class="btn-toolbar-win" title="Abrir este reporte con la plantilla actual">
+                        <i class="dx-icon-favorites text-amber-500"></i>
+                        <span>Predeterminar</span>
+                    </button>
+
                     <button type="button" id="btn-exportar-win" class="btn-toolbar-win" title="Exportar a Excel">
                         <i class="dx-icon-xlsxfile text-green-700"></i>
                         <span>Exportar</span>
@@ -265,10 +275,6 @@
                         <span>Cerrar</span>
                     </button>
                 </div>
-            </div>
-
-            <div class="text-right hidden xl:block">
-                <span class="text-xs font-bold text-gray-700 block">📊 {{ titulo_reporte }}</span>
             </div>
         </div>
 
@@ -300,6 +306,7 @@
     {{ configuracion_pivot|json_script:"config-pivot-data" }}
     {{ plantillas_usuario|json_script:"plantillas-usuario-data" }}
     {{ reporte_id|default:0|json_script:"reporte-id-data" }}
+    {{ plantilla_inicial_id|default:0|json_script:"plantilla-inicial-data" }}
     
     {{ fecha_inicio_actual|default:""|json_script:"fecha-inicio-actual-data" }}
     {{ fecha_fin_actual|default:""|json_script:"fecha-fin-actual-data" }}
@@ -324,6 +331,8 @@
 
     <script>
         const URL_GUARDAR_PLANTILLA = "{% url 'reportes:guardar_plantilla_pivot' %}";
+        const URL_ELIMINAR_PLANTILLA = "{% url 'reportes:eliminar_plantilla_pivot' %}";
+        const URL_PREDETERMINAR_PLANTILLA = "{% url 'reportes:predeterminar_plantilla_pivot' %}";
 
         function calcularFechaMacro(token) {
             if (!token) return new Date();
@@ -392,6 +401,8 @@
             let rawData = JSON.parse(document.getElementById('datos-json-data').textContent);
             const rawConfig = JSON.parse(document.getElementById('config-pivot-data').textContent);
             const plantillasUsuario = JSON.parse(document.getElementById('plantillas-usuario-data').textContent || '[]');
+            // Plantilla con la que abre (la predeterminada del usuario o la recién guardada); 0 = formato base
+            const plantillaInicialId = JSON.parse(document.getElementById('plantilla-inicial-data').textContent || '0');
 
             const fechaInicioActualStr = JSON.parse(document.getElementById('fecha-inicio-actual-data')?.textContent || '""');
             const fechaFinActualStr = JSON.parse(document.getElementById('fecha-fin-actual-data')?.textContent || '""');
@@ -676,11 +687,20 @@
                 width: 125
             }).dxDateBox("instance");
 
+            // La plantilla predeterminada del usuario se marca con ★ en la lista
+            var idPredeterminada = (plantillasUsuario.find(function(p) { return p.id !== 0 && p.es_default; }) || { id: 0 }).id;
+            function textoPlantilla(p) {
+                if (!p) return "";
+                return (p.id === idPredeterminada && p.id !== 0 ? "★ " : "") + p.nombre_plantilla;
+            }
+
             var comboPlantillas = $("#combo-plantillas").dxSelectBox({
                 items: plantillasUsuario,
-                displayExpr: "nombre_plantilla",
+                displayExpr: textoPlantilla,
                 valueExpr: "id",
-                value: plantillasUsuario.length > 0 ? plantillasUsuario[0].id : null,
+                value: plantillasUsuario.some(function(p) { return p.id === plantillaInicialId; })
+                    ? plantillaInicialId
+                    : (plantillasUsuario.length > 0 ? plantillasUsuario[0].id : null),
                 onValueChanged: function(e) {
                     var selectedItem = e.component.option("selectedItem");
                     actualizarBotonGuardar(selectedItem);
@@ -702,14 +722,20 @@
             // Aplica a los campos del formato base el acomodo guardado en una plantilla. Se empata por
             // dataField (o name en campos calculados), así la plantilla no depende del orden de los campos.
             // Los campos que la plantilla no menciona quedan en el Selector de Campos.
+            // La llave es el name si existe: dos campos pueden compartir dataField ("Venta Neta" y
+            // "% Venta" sobre VentaNeta) y solo el name los distingue.
+            function claveCampo(c) {
+                return c.name || c.dataField;
+            }
+
             function camposConAcomodo(camposPlantilla) {
                 var porClave = {};
                 (camposPlantilla || []).forEach(function(c) {
-                    var clave = c.dataField || c.name;
+                    var clave = claveCampo(c);
                     if (clave && !porClave[clave]) porClave[clave] = c;
                 });
                 return construirCampos().map(function(campo) {
-                    var guardado = porClave[campo.dataField || campo.name];
+                    var guardado = porClave[claveCampo(campo)];
                     if (!guardado) {
                         campo.area = undefined;
                         return campo;
@@ -717,6 +743,12 @@
                     PROPIEDADES_ACOMODO.forEach(function(p) {
                         if (guardado.hasOwnProperty(p)) campo[p] = guardado[p];
                     });
+                    // Un campo que se pasó a "Todos los campos" se guarda sin "area" (el JSON omite los
+                    // valores vacíos): no debe heredar el área que tenía en el formato base.
+                    if (!guardado.area) {
+                        campo.area = undefined;
+                        campo.areaIndex = undefined;
+                    }
                     if (campo.area === "data") campo.isMeasure = true;
                     return campo;
                 });
@@ -761,6 +793,18 @@
                     .attr("title", base
                         ? "El formato base no se puede modificar. Use \"Agregar\" para crear su propia plantilla"
                         : "Guardar cambios en plantilla actual");
+                $("#btn-eliminar-win")
+                    .prop("disabled", base)
+                    .attr("title", base ? "El formato base no se puede eliminar" : "Eliminar la plantilla actual");
+
+                // Predeterminar: ya no aplica si la plantilla actual es la que abre el reporte
+                var yaEs = (plantilla ? plantilla.id : 0) === idPredeterminada;
+                $("#btn-predeterminar-win")
+                    .prop("disabled", yaEs)
+                    .attr("title", yaEs
+                        ? "El reporte ya abre con esta plantilla"
+                        : "Abrir este reporte con la plantilla actual")
+                    .find("span").text(yaEs ? "Predeterminada" : "Predeterminar");
             }
             actualizarBotonGuardar(comboPlantillas.option("selectedItem"));
 
@@ -1109,8 +1153,12 @@
                 ds.reload();
             });
 
-            // Al abrir, si el formato base trae filtro avanzado se aplica de una vez
-            if (configBase.filtroAvanzado && esFormatoBase(comboPlantillas.option("selectedItem"))) {
+            // Al abrir: si es una plantilla del usuario (su predeterminada o la recién guardada) se aplica;
+            // si es el formato base y trae filtro avanzado, se aplica el filtro
+            var plantillaAlAbrir = comboPlantillas.option("selectedItem");
+            if (!esFormatoBase(plantillaAlAbrir)) {
+                aplicarPlantilla(plantillaAlAbrir);
+            } else if (configBase.filtroAvanzado) {
                 establecerFiltroAvanzado(configBase.filtroAvanzado);
                 aplicarFiltroAvanzado();
             }
@@ -1414,7 +1462,8 @@
                 .then(function(data) {
                     if (data.status === "success") {
                         DevExpress.ui.notify("Plantilla '" + nombre + "' guardada con éxito", "success", 3000);
-                        setTimeout(function() { window.location.reload(); }, 800);
+                        // Recarga abriendo la plantilla recién guardada (no la predeterminada)
+                        setTimeout(function() { recargarConPlantilla(data.id); }, 800);
                     } else {
                         DevExpress.ui.notify("Error: " + (data.message || "No se pudo guardar"), "error", 4000);
                     }
@@ -1424,6 +1473,62 @@
                     DevExpress.ui.notify("Error: " + err.message, "error", 4000);
                 });
             }
+
+            function recargarConPlantilla(id) {
+                var url = new URL(window.location.href);
+                url.searchParams.delete("fecha_inicio");
+                url.searchParams.delete("fecha_fin");
+                url.searchParams.set("plantilla", id);
+                window.location.href = url.toString();
+            }
+
+            function enviarAccionPlantilla(url, datos) {
+                return fetch(url, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", "X-CSRFToken": csrfToken },
+                    body: JSON.stringify(Object.assign({ reporte_id: reporteId }, datos))
+                }).then(function(res) {
+                    return res.json().then(function(data) {
+                        if (!res.ok || data.status !== "success") throw new Error(data.message || res.statusText);
+                        return data;
+                    });
+                });
+            }
+
+            $("#btn-eliminar-win").on("click", function() {
+                var plantilla = comboPlantillas.option("selectedItem");
+                if (esFormatoBase(plantilla)) return;
+                DevExpress.ui.dialog.confirm(
+                    "¿Eliminar la plantilla <b>" + escaparHtml(plantilla.nombre_plantilla) + "</b>? Esta acción no se puede deshacer.",
+                    "Eliminar plantilla"
+                ).done(function(confirmado) {
+                    if (!confirmado) return;
+                    enviarAccionPlantilla(URL_ELIMINAR_PLANTILLA, { plantilla_id: plantilla.id })
+                        .then(function(data) {
+                            DevExpress.ui.notify(data.message, "success", 2000);
+                            // Si era la predeterminada, el reporte vuelve a abrir con el formato base
+                            setTimeout(function() { recargarConPlantilla(0); }, 700);
+                        })
+                        .catch(function(err) { DevExpress.ui.notify("Error: " + err.message, "error", 4000); });
+                });
+            });
+
+            $("#btn-predeterminar-win").on("click", function() {
+                var plantilla = comboPlantillas.option("selectedItem");
+                var id = plantilla ? plantilla.id : 0;
+                enviarAccionPlantilla(URL_PREDETERMINAR_PLANTILLA, { plantilla_id: id })
+                    .then(function() {
+                        idPredeterminada = id;
+                        // Refresca la ★ de la lista sin perder lo que el usuario tiene en pantalla
+                        comboPlantillas.option("displayExpr", textoPlantilla);
+                        comboPlantillas.repaint();
+                        actualizarBotonGuardar(plantilla);
+                        DevExpress.ui.notify(id === 0
+                            ? "El reporte abrirá con el formato base"
+                            : "El reporte abrirá con '" + plantilla.nombre_plantilla + "'", "success", 2500);
+                    })
+                    .catch(function(err) { DevExpress.ui.notify("Error: " + err.message, "error", 4000); });
+            });
 
             $("#btn-guardar-win").on("click", function() {
                 var plantillaActual = comboPlantillas.option("selectedItem");
