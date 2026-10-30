@@ -104,7 +104,7 @@
                 itemElement.append($titleWrapper);
             },
             itemTemplate: function(itemData) {
-                var $iframe = $('<iframe class="tab-frame" src="' + itemData.url + '"></iframe>');
+                var $iframe = $('<iframe class="tab-frame"></iframe>').attr({ src: itemData.url, "data-tab-id": itemData.id });
                 
                 $iframe.on('load', function() {
                     if (loadPanelInstance) {
@@ -116,6 +116,8 @@
             },
             selectedIndex: 0,
             showNavButtons: true,
+            // Con la llave, al abrir o cerrar una pestaña no se recargan los iframes de las demás
+            keyExpr: "id",
             repaintChangesOnly: true,
             noDataText: "Selecciona un reporte en el menú lateral para abrir su pestaña."
         }).dxTabPanel("instance");
@@ -127,7 +129,7 @@
             var href = $(this).attr('href');
             var urlParams = new URLSearchParams(href.split('?')[1]);
             var openSlug = urlParams.get('open');
-            var titulo = $(this).text().trim() || openSlug.replace(/-/g, ' ').toUpperCase();
+            var titulo = tituloDeEnlace(this) || openSlug.replace(/-/g, ' ').toUpperCase();
 
             if (openSlug) {
                 e.preventDefault();
@@ -137,16 +139,26 @@
         });
     });
 
+    // Texto del enlace del menú lateral sin el nombre del ícono ("bar_chart") ni espacios de más
+    function tituloDeEnlace(enlace) {
+        return $(enlace).text().replace(/^\s*bar_chart\s*/i, '').replace(/\s+/g, ' ').trim();
+    }
+
     function procesarUrlParam() {
         var urlParams = new URLSearchParams(window.location.search);
         var openSlug = urlParams.get('open');
         if (openSlug) {
-            var nombreReporte = openSlug.replace(/[-_]/g, ' ').toUpperCase();
+            var enlaceMenu = $('a[href*="/reportes/tablas/?open=' + openSlug + '"]').get(0);
+            var nombreReporte = (enlaceMenu && tituloDeEnlace(enlaceMenu)) || openSlug.replace(/[-_]/g, ' ').toUpperCase();
             abrirTabReporte(openSlug, nombreReporte, '/reportes/pivot/' + openSlug + '/');
         }
     }
 
-    window.abrirTabReporte = function(id, titulo, url) {
+    // Cada clic en el menú abre una pestaña nueva, aunque el reporte ya esté abierto
+    // (así se pueden comparar dos plantillas o rangos de fechas del mismo reporte).
+    var consecutivoPestanas = 0;
+
+    window.abrirTabReporte = function(slug, titulo, url) {
         if (!tabPanelInstance) return;
 
         if (loadPanelInstance) {
@@ -154,31 +166,43 @@
             loadPanelInstance.show();
         }
 
-        var urlLimpia = ('/reportes/pivot/' + id + '/').replace(/\/+/g, '/');
+        var urlLimpia = ('/reportes/pivot/' + slug + '/').replace(/\/+/g, '/');
+        var items = (tabPanelInstance.option("dataSource") || []).slice();
 
-        var items = tabPanelInstance.option("dataSource") || [];
-        var indexExistente = items.findIndex(function(item) { return item.id === id; });
-
-        if (indexExistente !== -1) {
-            tabPanelInstance.option("selectedIndex", indexExistente);
-            setTimeout(function() {
-                if (loadPanelInstance) loadPanelInstance.hide();
-            }, 300);
-        } else {
-            items.push({
-                id: id,
-                title: titulo,
-                url: urlLimpia
-            });
-            tabPanelInstance.option("dataSource", items);
-            tabPanelInstance.option("selectedIndex", items.length - 1);
-        }
+        // Si el reporte ya tiene pestañas abiertas, la nueva se numera: "Ventas (2)"
+        var abiertas = items.filter(function(item) { return item.slug === slug; }).length;
+        consecutivoPestanas += 1;
+        items.push({
+            id: slug + "-" + consecutivoPestanas,
+            slug: slug,
+            title: abiertas ? titulo + " (" + (abiertas + 1) + ")" : titulo,
+            url: urlLimpia
+        });
+        tabPanelInstance.option("dataSource", items);
+        tabPanelInstance.option("selectedIndex", items.length - 1);
     };
 
     function cerrarPestana(id) {
         var items = tabPanelInstance.option("dataSource") || [];
+        var indice = items.findIndex(function(item) { return item.id === id; });
+        if (indice === -1) return;
+        var seleccionada = tabPanelInstance.option("selectedIndex");
         var newItems = items.filter(function(item) { return item.id !== id; });
         tabPanelInstance.option("dataSource", newItems);
+        if (newItems.length) {
+            // Queda seleccionada la misma pestaña que se veía, o la vecina si se cerró la activa
+            var nueva = seleccionada > indice ? seleccionada - 1 : Math.min(seleccionada, newItems.length - 1);
+            tabPanelInstance.option("selectedIndex", nueva);
+        }
     }
+
+    // Lo llama el botón "Cerrar" de la barra del pivot (que vive dentro del iframe de la pestaña)
+    window.cerrarPestanaDeVentana = function(ventana) {
+        var encontrada = null;
+        $("#tabpanel-container iframe.tab-frame").each(function() {
+            if (this.contentWindow === ventana) encontrada = this.getAttribute("data-tab-id");
+        });
+        if (encontrada) cerrarPestana(encontrada);
+    };
 </script>
 {% endblock %}

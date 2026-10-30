@@ -258,6 +258,13 @@
                         <span>Filtro</span>
                     </button>
                 </div>
+
+                <div class="flex items-center gap-1 border-l pl-2.5 border-gray-300">
+                    <button type="button" id="btn-cerrar-win" class="btn-toolbar-win" title="Cerrar esta pestaña">
+                        <i class="dx-icon-close text-red-600"></i>
+                        <span>Cerrar</span>
+                    </button>
+                </div>
             </div>
 
             <div class="text-right hidden xl:block">
@@ -403,6 +410,23 @@
             };
 
             // Construye copias nuevas de los campos base (DevExtreme modifica los objetos que recibe)
+            // "56" < "100" < "CANICA": los valores numéricos (aunque vengan como texto) van primero y
+            // se comparan como número; el texto después, en orden alfabético ("Lote 2" antes de "Lote 10").
+            var PATRON_NUMERO = /^\s*-?\d+(\.\d+)?\s*$/;
+            var compararTexto = new Intl.Collator("es", { numeric: true, sensitivity: "base" }).compare;
+
+            function compararNatural(a, b) {
+                var va = a.value, vb = b.value;
+                var vacioA = va === null || va === undefined || va === "";
+                var vacioB = vb === null || vb === undefined || vb === "";
+                if (vacioA || vacioB) return vacioA === vacioB ? 0 : (vacioA ? 1 : -1);
+                var numA = typeof va === "number" || PATRON_NUMERO.test(va);
+                var numB = typeof vb === "number" || PATRON_NUMERO.test(vb);
+                if (numA && numB) return Number(va) - Number(vb);
+                if (numA !== numB) return numA ? -1 : 1;
+                return compararTexto(String(va), String(vb));
+            }
+
             function construirCampos() {
                 return (customFields || []).map(function(f) {
                 let fieldObj = Object.assign({}, f);
@@ -444,6 +468,13 @@
 
                 if (f.format) {
                     fieldObj.format = f.format;
+                }
+
+                // Orden natural en filas/columnas: primero los números como números (56, 64 ... 216)
+                // y luego el texto (CANICA, CONTRADESECHO...). Se desactiva con "ordenNatural": false.
+                delete fieldObj.ordenNatural;
+                if (!fieldObj.isMeasure && !f.cociente && f.dataType !== "date" && f.ordenNatural !== false) {
+                    fieldObj.sortingMethod = compararNatural;
                 }
 
                 // Campo calculado como cociente de sumas, equivalente al UnboundExpression con
@@ -1050,6 +1081,17 @@
             }
 
             $("#btn-filtro-win, #btn-editar-filtro").on("click", function() { abrirEditorFiltro(); });
+
+            // Cerrar: el pivot vive en un iframe dentro de una pestaña de "Tablas Dinámicas";
+            // se le pide a la página contenedora que cierre la pestaña de esta ventana.
+            $("#btn-cerrar-win").on("click", function() {
+                var contenedor = window.parent;
+                if (contenedor && contenedor !== window && typeof contenedor.cerrarPestanaDeVentana === "function") {
+                    contenedor.cerrarPestanaDeVentana(window);
+                } else {
+                    window.location.href = "{% url 'reportes:lista_tablas' %}";
+                }
+            });
 
             $("#chk-filtro-activo").on("change", function() {
                 filtroAvanzadoActivo = this.checked;
