@@ -116,3 +116,59 @@ class BitacoraSincronizacion(models.Model):
         if not self.fecha_fin:
             return None
         return self.fecha_fin - self.fecha_inicio
+
+
+class ClaveExcel(models.Model):
+    """
+    Clave personal con la que Excel (Power Query) consulta los reportes. Excel la pide la primera vez
+    (autenticación "Básica": usuario del portal + esta clave) y la guarda en la computadora, no en el archivo.
+    Solo se guarda el SHA-256 de la clave; el usuario la ve una sola vez al generarla.
+    """
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='claves_excel')
+    nombre = models.CharField(max_length=100, verbose_name="Equipo o descripción", help_text="Ej. Laptop oficina")
+    prefijo = models.CharField(max_length=12, verbose_name="Inicio de la clave", help_text="Para reconocerla sin mostrarla completa")
+    clave_hash = models.CharField(max_length=64, unique=True, editable=False)
+    activa = models.BooleanField(default=True, verbose_name="¿Activa?")
+    vence = models.DateField(null=True, blank=True, verbose_name="Vence", help_text="Vacío = no vence")
+    fecha_creacion = models.DateTimeField(auto_now_add=True, verbose_name="Creada")
+    ultimo_uso = models.DateTimeField(null=True, blank=True, verbose_name="Último uso")
+
+    class Meta:
+        db_table = 'rep_clave_excel'
+        verbose_name = "Clave de Excel"
+        verbose_name_plural = "Claves de Excel"
+        ordering = ['usuario__username', '-fecha_creacion']
+
+    def __str__(self):
+        return f"{self.usuario} - {self.nombre} ({self.prefijo}…)"
+
+
+class BitacoraConsultaExcel(models.Model):
+    """Cada vez que un Excel actualiza los datos de un reporte (correcta, rechazada o con error)."""
+    CORRECTO = 'correcto'
+    DENEGADO = 'denegado'
+    ERROR = 'error'
+    ESTATUS = [(CORRECTO, 'Correcto'), (DENEGADO, 'Denegado'), (ERROR, 'Error')]
+
+    fecha = models.DateTimeField(auto_now_add=True, verbose_name="Fecha")
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    clave = models.ForeignKey(ClaveExcel, null=True, blank=True, on_delete=models.SET_NULL, related_name='consultas')
+    reporte = models.ForeignKey(Pivot_Dinamico, null=True, blank=True, on_delete=models.SET_NULL, related_name='consultas_excel')
+    empresa = models.CharField(max_length=20, blank=True, default='')
+    parametros = models.JSONField(default=dict, blank=True, verbose_name="Parámetros")
+    version_plantilla = models.CharField(max_length=20, blank=True, default='', verbose_name="Versión de la plantilla")
+    filas = models.PositiveIntegerField(default=0)
+    duracion_ms = models.PositiveIntegerField(default=0, verbose_name="Duración (ms)")
+    estatus = models.CharField(max_length=20, choices=ESTATUS)
+    mensaje = models.TextField(blank=True, default='')
+    ip = models.GenericIPAddressField(null=True, blank=True, verbose_name="IP")
+
+    class Meta:
+        db_table = 'rep_bitacora_consulta_excel'
+        verbose_name = "Consulta desde Excel"
+        verbose_name_plural = "Bitácora de consultas desde Excel"
+        ordering = ['-fecha']
+        indexes = [models.Index(fields=['reporte', '-fecha'], name='rep_bitexcel_rep_fecha_idx')]
+
+    def __str__(self):
+        return f"{self.usuario} {self.reporte} {self.fecha:%d/%m/%Y %H:%M} ({self.get_estatus_display()})"

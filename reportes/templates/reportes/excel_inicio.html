@@ -1,0 +1,111 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<style>
+    .rx { max-width: 960px; padding: 8px 0; font-size: 14px; }
+    .rx h1 { font-size: 18px; font-weight: 700; margin: 0 0 4px; }
+    .rx h2 { font-size: 15px; font-weight: 700; margin: 0 0 10px; }
+    .rx .suave { color: #64748b; }
+    .rx .caja { border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; margin-bottom: 16px; background: #fff; }
+    html.dark .rx .caja { border-color: #334155; background: #171717; }
+    .rx table { width: 100%; border-collapse: collapse; }
+    .rx th, .rx td { text-align: left; padding: 7px 8px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; }
+    html.dark .rx th, html.dark .rx td { border-color: #334155; }
+    .rx th { font-size: 12px; text-transform: uppercase; letter-spacing: .03em; color: #64748b; }
+    .rx .btn { display: inline-flex; align-items: center; gap: 4px; background: #72a651; color: #fff; border: 0; border-radius: 6px;
+               padding: 7px 14px; font-weight: 600; cursor: pointer; text-decoration: none; font-size: 13px; }
+    .rx .btn:hover { background: #476b32; }
+    .rx .btn-sec { background: transparent; color: #b91c1c; border: 1px solid #fca5a5; }
+    .rx .btn-sec:hover { background: #fef2f2; }
+    .rx input[type=text] { border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 10px; width: 260px; max-width: 100%; background: transparent; }
+    .rx .nueva { border: 2px solid #72a651; background: #f2f7f0; }
+    html.dark .rx .nueva { background: #1a2912; }
+    .rx code { font-family: Consolas, monospace; font-size: 15px; background: #fff; border: 1px solid #cfe7c2; border-radius: 6px; padding: 6px 10px; user-select: all; }
+    html.dark .rx code { background: #0a0a0a; }
+    .rx ol { margin: 0; padding-left: 20px; } .rx ol li { margin-bottom: 6px; }
+    .rx .etiqueta { font-size: 12px; border-radius: 999px; padding: 2px 8px; }
+    .rx .activa { background: #dcfce7; color: #166534; } .rx .inactiva { background: #f1f5f9; color: #64748b; }
+</style>
+
+<div class="rx">
+    <h1>Reportes en Excel</h1>
+    <p class="suave" style="margin: 0 0 16px;">Descarga la plantilla de un reporte, escribe la empresa y las fechas en la hoja
+        <strong>Parámetros</strong> y en Excel usa <strong>Datos &gt; Actualizar todo</strong>. Los datos llegan directo del portal,
+        con tus mismos permisos.</p>
+
+    {% if clave_nueva %}
+    <div class="caja nueva">
+        <h2>Tu nueva clave de Excel</h2>
+        <p style="margin: 0 0 10px;"><code id="clave-nueva">{{ clave_nueva }}</code>
+            <button type="button" class="btn" onclick="navigator.clipboard.writeText(document.getElementById('clave-nueva').textContent); this.textContent='Copiada';">Copiar</button></p>
+        <p style="margin: 0;">Cópiala ahora: <strong>no se volverá a mostrar</strong>. Excel te la pedirá la primera vez que actualices
+            y la guardará en esta computadora. Si la pierdes, genera otra.</p>
+    </div>
+    {% endif %}
+
+    <div class="caja">
+        <h2>Cómo se usa</h2>
+        <ol>
+            <li>Genera tu clave de Excel (abajo). Es distinta de tu contraseña del portal y la puedes desactivar cuando quieras.</li>
+            <li>Descarga la plantilla del reporte y ábrela. Si Excel muestra la barra amarilla, da clic en <strong>Habilitar edición</strong>
+                y luego en <strong>Habilitar contenido</strong>.</li>
+            <li>En la hoja <strong>Parámetros</strong> cambia la empresa y las fechas, y usa <strong>Datos &gt; Actualizar todo</strong> (Ctrl+Alt+F5).</li>
+            <li>La primera vez Excel pide credenciales: elige <strong>Básica</strong>, usuario <strong>{{ usuario }}</strong> y como contraseña
+                tu clave de Excel. En "Seleccione el nivel" deja <strong>{{ servidor }}/</strong> y da clic en Conectar.</li>
+        </ol>
+    </div>
+
+    <div class="caja">
+        <h2>Plantillas disponibles</h2>
+        {% if reportes %}
+        <table>
+            <thead><tr><th>Reporte</th><th>Versión</th><th></th></tr></thead>
+            <tbody>
+            {% for r in reportes %}
+                <tr>
+                    <td>{{ r.reporte.nombre }}</td>
+                    <td class="suave">{{ r.version }}</td>
+                    <td style="text-align:right;"><a class="btn" href="{% url 'reportes:excel_plantilla' r.reporte.slug %}">Descargar Excel</a></td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="suave" style="margin:0;">Todavía no hay plantillas de Excel para los reportes que puedes ver.</p>
+        {% endif %}
+    </div>
+
+    <div class="caja">
+        <h2>Mis claves de Excel</h2>
+        <form method="post" action="{% url 'reportes:excel_nueva_clave' %}" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom: 12px;">
+            {% csrf_token %}
+            <input type="text" name="nombre" placeholder="Equipo, ej. Laptop oficina" maxlength="100" required>
+            <button type="submit" class="btn">Generar clave</button>
+        </form>
+        {% if claves %}
+        <table>
+            <thead><tr><th>Equipo</th><th>Clave</th><th>Estado</th><th>Creada</th><th>Último uso</th><th></th></tr></thead>
+            <tbody>
+            {% for c in claves %}
+                <tr>
+                    <td>{{ c.nombre }}</td>
+                    <td class="suave">{{ c.prefijo }}…</td>
+                    <td>{% if c.activa %}<span class="etiqueta activa">Activa{% if c.vence %} hasta {{ c.vence|date:"d/m/Y" }}{% endif %}</span>{% else %}<span class="etiqueta inactiva">Desactivada</span>{% endif %}</td>
+                    <td class="suave">{{ c.fecha_creacion|date:"d/m/Y H:i" }}</td>
+                    <td class="suave">{{ c.ultimo_uso|date:"d/m/Y H:i"|default:"—" }}</td>
+                    <td style="text-align:right;">
+                        {% if c.activa %}
+                        <form method="post" action="{% url 'reportes:excel_revocar_clave' c.pk %}" onsubmit="return confirm('¿Desactivar esta clave? Los Excel que la usan dejarán de actualizar.');">
+                            {% csrf_token %}<button type="submit" class="btn btn-sec">Desactivar</button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="suave" style="margin:0;">Aún no tienes claves.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

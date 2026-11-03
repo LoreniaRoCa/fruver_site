@@ -62,6 +62,27 @@ def resolver_macro_fecha(token):
     except ValueError:
         return hoy
 
+def ejecutar_consulta_reporte(reporte, empresa_id, fecha_inicio, fecha_fin):
+    """Corre el query_sql del reporte. Sus %s son: 3 = empresa, fecha inicial y final; 2 = fechas; 1 = empresa.
+    Regresa (nombres de columnas, filas). La usan la página y la API de Excel."""
+    num_params = reporte.query_sql.count("%s")
+    params = []
+    if num_params == 3:
+        params = [empresa_id, fecha_inicio, fecha_fin]
+    elif num_params == 2:
+        params = [fecha_inicio, fecha_fin]
+    elif num_params == 1:
+        params = [empresa_id]
+
+    with connection.cursor() as cursor:
+        if params:
+            cursor.execute(reporte.query_sql, params)
+        else:
+            cursor.execute(reporte.query_sql)
+        columnas = [col[0] for col in cursor.description]
+        return columnas, cursor.fetchall()
+
+
 def usuario_puede_ver_reporte(user, reporte):
     """Valida permiso_codename del reporte (ej. 'ver_ventas_pivot' o 'reportes.ver_ventas_pivot')."""
     codename = (reporte.permiso_codename or "").strip()
@@ -123,34 +144,16 @@ def reporte_dinamico_view(request, slug):
     fecha_fin_val = resolver_macro_fecha(fecha_fin_raw or macro_fin)
 
     datos = []
-    with connection.cursor() as cursor:
-        num_params = reporte.query_sql.count("%s")
-        params = []
-
-        if num_params == 3:
-            params = [empresa_activa_id, fecha_inicio_val, fecha_fin_val]
-        elif num_params == 2:
-            params = [fecha_inicio_val, fecha_fin_val]
-        elif num_params == 1:
-            params = [empresa_activa_id]
-
-        if params:
-            cursor.execute(reporte.query_sql, params)
-        else:
-            cursor.execute(reporte.query_sql)
-        
-        columnas = [col[0] for col in cursor.description]
-        rows = cursor.fetchall()
-        
-        for row in rows:
-            fila_dict = {}
-            for col, val in zip(columnas, row):
-                if isinstance(val, Decimal):
-                    val = float(val)
-                elif isinstance(val, (date, datetime)):
-                    val = val.isoformat()
-                fila_dict[col] = val
-            datos.append(fila_dict)
+    columnas, rows = ejecutar_consulta_reporte(reporte, empresa_activa_id, fecha_inicio_val, fecha_fin_val)
+    for row in rows:
+        fila_dict = {}
+        for col, val in zip(columnas, row):
+            if isinstance(val, Decimal):
+                val = float(val)
+            elif isinstance(val, (date, datetime)):
+                val = val.isoformat()
+            fila_dict[col] = val
+        datos.append(fila_dict)
 
     if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.GET.get('format') == 'json':
             return JsonResponse({

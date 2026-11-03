@@ -1,0 +1,21 @@
+{
+  "version": "202611031353",
+  "hoja_parametros": "Parámetros",
+  "celdas": {
+    "servidor": "C4",
+    "empresa": "C5",
+    "empresas": "D5",
+    "fecha_inicio": "C6",
+    "fecha_fin": "C7"
+  },
+  "columnas": [
+    "Variedad",
+    "Color",
+    "Etiqueta",
+    "Producto",
+    "Tamaño",
+    "Cantidad",
+    "Fecha"
+  ],
+  "creada": "2026-11-03T13:53:33-06:00"
+}
