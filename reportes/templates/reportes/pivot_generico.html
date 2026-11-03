@@ -253,6 +253,11 @@
                         <span>Exportar</span>
                     </button>
 
+                    <button type="button" id="btn-imprimir-win" class="btn-toolbar-win" title="Vista previa e impresión">
+                        <i class="dx-icon-print text-slate-700"></i>
+                        <span>Imprimir</span>
+                    </button>
+
                     <button type="button" id="btn-subtotales-win" class="btn-toolbar-win" title="Mostrar u ocultar subtotales">
                         <i class="dx-icon-variable text-amber-600"></i>
                         <span>SubTotal</span>
@@ -626,8 +631,10 @@
                 scrolling: { mode: "virtual" },
 
                 showBorders: true,
-                showRowTotals: true,
-                showColumnTotals: true,
+                // Subtotales al abrir: el formato base puede apagarlos con "showRowTotals": false
+                // (equivale a OptionsView.ShowRowTotals del PivotGrid de Windows); el botón SubTotal los cambia
+                showRowTotals: configBase.showRowTotals !== false,
+                showColumnTotals: configBase.showRowTotals !== false,
                 showRowGrandTotals: true,
                 showColumnGrandTotals: true,
 
@@ -1165,9 +1172,74 @@
             actualizarBarraFiltros();
 
             // Función para exportar a Excel con encabezado corporativo (Logo, Nombre Empresa, Título y Fechas)
+            // Formato de Excel equivalente al formato del campo en DevExtreme; null si no se puede traducir
+            function formatoExcel(formato) {
+                if (formato && typeof formato === "object") {
+                    var decimales = formato.precision !== undefined ? formato.precision : 2;
+                    var ceros = decimales > 0 ? "." + "0".repeat(decimales) : "";
+                    if (formato.type === "percent") return "0" + ceros + "%";
+                    if (formato.type === "currency") return '"$"#,##0' + ceros;
+                    if (formato.type === "fixedPoint") return "#,##0" + ceros;
+                    return null;
+                }
+                if (formato === "percent") return "0.00%";
+                if (formato === "currency") return '"$"#,##0.00';
+                // Formatos con patrón ("#,##0", "$#,##0.00"): Excel los entiende tal cual, con el $ entre comillas
+                if (typeof formato === "string" && /[#0]/.test(formato)) return formato.replace(/\$/g, '"$"');
+                return null;
+            }
+
+            // Mide, mientras DevExtreme exporta, el texto de cada columna y dónde empiezan los datos.
+            // Con eso cada columna toma el ancho de su contenido: las de agrupación (Variedad, Etiqueta,
+            // Producto) quedan amplias y las de números (tamaños) angostas, en lugar de un ancho fijo.
+            function medidorDeHoja() {
+                var largo = {};          // columna -> caracteres más largos
+                var primeraColDatos = Infinity, primeraFilaDatos = Infinity, ultimaCol = 0;
+                return {
+                    registrar: function(options) {
+                        var celda = options.excelCell, pc = options.pivotCell || {};
+                        var col = celda.col, texto = pc.text !== undefined && pc.text !== null ? String(pc.text)
+                            : (celda.value === null || celda.value === undefined ? "" : String(celda.value));
+                        largo[col] = Math.max(largo[col] || 0, texto.length);
+                        ultimaCol = Math.max(ultimaCol, col);
+                        if (pc.area === "data") {
+                            primeraColDatos = Math.min(primeraColDatos, col);
+                            primeraFilaDatos = Math.min(primeraFilaDatos, celda.row);
+                        }
+                    },
+                    aplicarAnchos: function(hoja) {
+                        for (var c = 1; c <= ultimaCol; c++) {
+                            var esDato = c >= primeraColDatos;
+                            var ancho = (largo[c] || 0) + 2;
+                            hoja.getColumn(c).width = esDato ? Math.min(Math.max(ancho, 7), 16) : Math.min(Math.max(ancho, 10), 42);
+                        }
+                    },
+                    // Filas de encabezado de la tabla (Tamaño, 56, 64...): se repiten en cada hoja impresa
+                    filasEncabezado: function() {
+                        return primeraFilaDatos === Infinity ? null : { desde: 5, hasta: primeraFilaDatos - 1 };
+                    }
+                };
+            }
+
+            function configurarImpresionExcel(hoja, medidas) {
+                hoja.pageSetup = {
+                    paperSize: 1,                // Carta
+                    orientation: "landscape",
+                    fitToPage: true,
+                    fitToWidth: 1,               // una hoja de ancho...
+                    fitToHeight: 0,              // ...y las de alto que hagan falta
+                    horizontalCentered: true,
+                    margins: { left: 0.3, right: 0.3, top: 0.4, bottom: 0.4, header: 0.2, footer: 0.2 }
+                };
+                var enc = medidas.filasEncabezado();
+                if (enc && enc.hasta >= enc.desde) hoja.pageSetup.printTitlesRow = enc.desde + ":" + enc.hasta;
+                hoja.headerFooter.oddFooter = "&L" + String(nombreEmpresaGlobal || "").replace(/&/g, "&&") + "&RPágina &P de &N";
+            }
+
             async function exportarPivotAExcel() {
                 var workbook = new ExcelJS.Workbook();
                 var worksheet = workbook.addWorksheet("Reporte Pivot");
+                var medidas = medidorDeHoja();
 
                 // Mapeo dinámico de formatos
                 var fields = pivotGrid.getDataSource().fields();
@@ -1178,32 +1250,41 @@
                     }
                 });
 
-                // 1. EXPORTAMOS EL PIVOTGRID AL WORKSHEET
+                // 1. EXPORTAMOS EL PIVOTGRID AL WORKSHEET a partir de la fila 5: las filas 1-4 quedan para
+                // logo, empresa, título y periodo. (Antes se exportaba en la fila 1 y se insertaban filas
+                // arriba, y eso deshacía las celdas combinadas: los encabezados salían repetidos.)
                 DevExpress.excelExporter.exportPivotGrid({
                     component: pivotGrid,
                     worksheet: worksheet,
+                    topLeftCell: { row: 5, column: 1 },
+                    // Nombres de los campos de fila y columna (Variedad, Producto, Tamaño...) como en pantalla
+                    exportRowFieldHeaders: true,
+                    exportColumnFieldHeaders: true,
                     customizeCell: function(options) {
                         var pivotCell = options.pivotCell;
                         var excelCell = options.excelCell;
+                        medidas.registrar(options);
 
                         if (pivotCell && pivotCell.area === "data") {
                             var dataField = pivotCell.dataField;
                             var fieldFormat = dataField ? (dataField.format || fieldFormats[dataField.dataField]) : null;
                             var cellText = pivotCell.text || "";
+                            var formatoCampo = formatoExcel(fieldFormat);
 
-                            if (cellText.indexOf("%") !== -1) {
+                            if (formatoCampo) {
+                                // El mismo formato que en pantalla (#,##0 / $#,##0.00 / 0.00%)
+                                excelCell.numFmt = formatoCampo;
+                            } else if (cellText.indexOf("%") !== -1) {
                                 excelCell.numFmt = '0.00%';
                             } else if (fieldFormat === "currency" || cellText.indexOf("$") !== -1) {
                                 excelCell.numFmt = '"$"#,##0.00;("$"#,##0.00);"-"';
                             } else if (typeof pivotCell.value === "number") {
-                                excelCell.numFmt = '#,##0.00;(#,##0.00);"-"';
+                                // Sin formato en el campo: enteros sin decimales (como en pantalla), el resto con 2
+                                excelCell.numFmt = Number.isInteger(pivotCell.value) ? '#,##0' : '#,##0.00';
                             }
                         }
                     }
                 }).then(async function() {
-                    // 2. DESPLAZAMOS 4 FILAS
-                    worksheet.spliceRows(1, 0, [], [], [], []);
-
                     // Ajustar alto de las filas del encabezado
                     worksheet.getRow(1).height = 20;
                     worksheet.getRow(2).height = 22;
@@ -1275,7 +1356,11 @@
                         }
                     });
 
-                    // 7. DESCARGA
+                    // 7. ANCHOS DE COLUMNA Y CONFIGURACIÓN DE IMPRESIÓN
+                    medidas.aplicarAnchos(worksheet);
+                    configurarImpresionExcel(worksheet, medidas);
+
+                    // 8. DESCARGA
                     var buffer = await workbook.xlsx.writeBuffer();
                     var tituloGuardar = "{{ titulo_reporte|escapejs }}".replace(/[^a-zA-Z0-9_-]/g, "_");
                     saveAs(new Blob([buffer], { type: "application/octet-stream" }), tituloGuardar + ".xlsx");
@@ -1287,6 +1372,136 @@
             // Evento exportar
             $("#btn-exportar-win").off("click").on("click", function() {
                 exportarPivotAExcel();
+            });
+
+            // IMPRESIÓN: la tabla se arma con el mismo exportador de Excel (mismas celdas combinadas, textos
+            // y nombres de campos que el archivo) y se abre en una vista previa con el encabezado de la empresa.
+            // La vista previa calcula cuántas hojas saldrán y permite horizontal/vertical y ajustar al ancho.
+            async function imprimirPivot() {
+                var ventana = window.open("", "_blank");
+                if (!ventana) {
+                    DevExpress.ui.notify("El navegador bloqueó la ventana de impresión; permite las ventanas emergentes de este sitio.", "warning", 4000);
+                    return;
+                }
+                ventana.document.write("<p style='font-family:sans-serif;padding:16px'>Preparando vista previa...</p>");
+
+                var hoja = new ExcelJS.Workbook().addWorksheet("p");
+                var celdas = {};
+                await DevExpress.excelExporter.exportPivotGrid({
+                    component: pivotGrid,
+                    worksheet: hoja,
+                    topLeftCell: { row: 1, column: 1 },
+                    exportRowFieldHeaders: true,
+                    exportColumnFieldHeaders: true,
+                    customizeCell: function(o) {
+                        var pc = o.pivotCell || {};
+                        var texto = pc.text !== undefined && pc.text !== null ? pc.text
+                            : (o.excelCell.value === null || o.excelCell.value === undefined ? "" : o.excelCell.value);
+                        celdas[o.excelCell.row + "," + o.excelCell.col] = {
+                            texto: String(texto),
+                            dato: pc.area === "data",
+                            total: pc.rowType === "T" || pc.rowType === "GT" || pc.columnType === "T" || pc.columnType === "GT"
+                                   || (pc.area === "row" && pc.type && pc.type !== "D")
+                        };
+                    }
+                });
+
+                // Celdas combinadas -> rowspan/colspan
+                var combinadas = {}, cubiertas = {};
+                Object.values(hoja._merges || {}).forEach(function(m) {
+                    var r = m.model || m;
+                    combinadas[r.top + "," + r.left] = { filas: r.bottom - r.top + 1, cols: r.right - r.left + 1 };
+                    for (var f = r.top; f <= r.bottom; f++)
+                        for (var c = r.left; c <= r.right; c++)
+                            if (f !== r.top || c !== r.left) cubiertas[f + "," + c] = true;
+                });
+                var filas = hoja.rowCount, cols = hoja.columnCount, filaDatos = Infinity;
+                Object.keys(celdas).forEach(function(k) { if (celdas[k].dato) filaDatos = Math.min(filaDatos, +k.split(",")[0]); });
+
+                var html = [];
+                for (var f = 1; f <= filas; f++) {
+                    if (f === 1) html.push("<thead>");
+                    if (f === filaDatos) html.push("</thead><tbody>");
+                    html.push("<tr>");
+                    for (var c = 1; c <= cols; c++) {
+                        var k = f + "," + c;
+                        if (cubiertas[k]) continue;
+                        var d = celdas[k] || { texto: "" }, span = combinadas[k] || {};
+                        var clases = [d.dato ? "num" : "", d.total ? "tot" : "", f < filaDatos ? "enc" : ""].join(" ").trim();
+                        html.push("<td" + (span.filas > 1 ? " rowspan='" + span.filas + "'" : "") + (span.cols > 1 ? " colspan='" + span.cols + "'" : "")
+                                  + (clases ? " class='" + clases + "'" : "") + ">" + escaparHtml(d.texto) + "</td>");
+                    }
+                    html.push("</tr>");
+                }
+                html.push(filaDatos === Infinity ? "</thead>" : "</tbody>");
+
+                var fIni = dateBoxInicio.option("value"), fFin = dateBoxFin.option("value");
+                var periodo = "Período: Del " + (fIni ? DevExpress.localization.formatDate(fIni, "dd/MM/yyyy") : "")
+                            + " al " + (fFin ? DevExpress.localization.formatDate(fFin, "dd/MM/yyyy") : "");
+                var titulo = "{{ titulo_reporte|escapejs }}".toUpperCase();
+                var logo = logoEmpresaUrl ? new URL(logoEmpresaUrl, window.location.origin).href : "";
+
+                ventana.document.open();
+                ventana.document.write(
+                    "<!doctype html><html lang='es'><head><meta charset='utf-8'><title>" + escaparHtml(titulo) + "</title>" +
+                    "<style id='estilo-pagina'></style><style>" +
+                    "body{margin:0;font-family:Calibri,'Segoe UI',Arial,sans-serif;color:#0f172a;background:#e2e8f0}" +
+                    ".barra{position:sticky;top:0;z-index:2;display:flex;gap:16px;align-items:center;flex-wrap:wrap;padding:10px 16px;background:#476b32;color:#fff;font-size:13px}" +
+                    ".barra b{font-size:15px}.barra button{background:#fff;color:#476b32;border:0;border-radius:6px;padding:7px 16px;font-weight:700;cursor:pointer}" +
+                    ".barra label{display:inline-flex;gap:6px;align-items:center}.barra select{padding:3px 6px;border-radius:4px;border:0}" +
+                    ".papel{background:#fff;margin:16px auto;box-shadow:0 2px 10px rgba(0,0,0,.2);padding:8mm;box-sizing:border-box;overflow:hidden}" +
+                    ".enc-emp{display:flex;align-items:center;gap:14px;margin-bottom:8px}.enc-emp img{height:46px}" +
+                    ".enc-emp .emp{font-weight:700;font-size:12px}.enc-emp .tit{font-weight:700;font-size:16px}.enc-emp .per{font-style:italic;color:#475569;font-size:12px}" +
+                    "table{border-collapse:collapse;font-size:10px}td{border:1px solid #cbd5e1;padding:2px 4px;vertical-align:top;white-space:nowrap}" +
+                    "td.num{text-align:right}td.enc{background:#f1f5f9;font-weight:700;text-align:center;vertical-align:bottom}td.tot{font-weight:700;background:#f8fafc}" +
+                    "thead{display:table-header-group}tr{page-break-inside:avoid}" +
+                    "@media print{body{background:#fff}.barra{display:none}.papel{margin:0;box-shadow:none;padding:0;width:auto!important}}" +
+                    "</style></head><body>" +
+                    "<div class='barra'><b>Vista previa</b>" +
+                    "<label>Orientación <select id='orientacion'><option value='landscape'>Horizontal</option><option value='portrait'>Vertical</option></select></label>" +
+                    "<label><input type='checkbox' id='ajustar' checked> Ajustar al ancho de una hoja</label>" +
+                    "<span id='hojas'></span><span style='flex:1'></span><button id='imprimir'>Imprimir</button></div>" +
+                    "<div class='papel' id='papel'><div id='contenido'>" +
+                    "<div class='enc-emp'>" + (logo ? "<img src='" + logo + "' alt=''>" : "") +
+                    "<div><div class='emp'>" + escaparHtml(String(nombreEmpresaGlobal || "").toUpperCase()) + "</div><div class='tit'>" + escaparHtml(titulo) +
+                    "</div><div class='per'>" + escaparHtml(periodo) + "</div></div></div>" +
+                    "<table id='tabla'>" + html.join("") + "</table></div></div>" +
+                    "<script>(" + vistaPreviaImpresion.toString() + ")();<\/script></body></html>");
+                ventana.document.close();
+            }
+
+            // Corre dentro de la ventana de vista previa: tamaño de hoja carta, escala y número de hojas
+            function vistaPreviaImpresion() {
+                var MM = 96 / 25.4, MARGEN = 8;
+                var contenido = document.getElementById("contenido"), papel = document.getElementById("papel");
+                function calcular() {
+                    var horizontal = document.getElementById("orientacion").value === "landscape";
+                    var anchoMm = (horizontal ? 279.4 : 215.9), altoMm = (horizontal ? 215.9 : 279.4);
+                    var anchoUtil = (anchoMm - 2 * MARGEN) * MM, altoUtil = (altoMm - 2 * MARGEN) * MM;
+                    contenido.style.zoom = 1;
+                    var escala = document.getElementById("ajustar").checked ? Math.min(1, anchoUtil / contenido.scrollWidth) : 1;
+                    contenido.style.zoom = escala;
+                    papel.style.width = (anchoMm * MM) + "px";
+                    var hojasAlto = Math.max(1, Math.ceil(contenido.scrollHeight * escala / altoUtil));
+                    var hojasAncho = Math.max(1, Math.ceil(contenido.scrollWidth * escala / anchoUtil));
+                    var total = hojasAlto * hojasAncho;
+                    document.getElementById("hojas").textContent = "Se imprimirán aprox. " + total + (total === 1 ? " hoja" : " hojas")
+                        + (escala < 1 ? " (al " + Math.round(escala * 100) + "%)" : "");
+                    document.getElementById("estilo-pagina").textContent = "@page{size:letter " + (horizontal ? "landscape" : "portrait") + ";margin:" + MARGEN + "mm}";
+                }
+                document.getElementById("orientacion").onchange = calcular;
+                document.getElementById("ajustar").onchange = calcular;
+                document.getElementById("imprimir").onclick = function() { window.print(); };
+                var img = document.querySelector(".enc-emp img");
+                if (img && !img.complete) img.onload = img.onerror = calcular;
+                calcular();
+            }
+
+            $("#btn-imprimir-win").on("click", function() {
+                imprimirPivot().catch(function(err) {
+                    console.error("Error al preparar la impresión:", err);
+                    DevExpress.ui.notify("No se pudo preparar la impresión: " + err.message, "error", 4000);
+                });
             });
 
             // 1. EVENTO ACTUALIZAR (AJAX)
@@ -1376,6 +1591,7 @@
                 
                 $(this).toggleClass("bg-amber-100 border-amber-400", showSubtotals);
             });
+            $("#btn-subtotales-win").toggleClass("bg-amber-100 border-amber-400", pivotGrid.option("showRowTotals"));
 
             // 4. EVENTO MOSTRAR/OCULTAR GRÁFICA
             var chart = $("#pivotgrid-chart").dxChart({
