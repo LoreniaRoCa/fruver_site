@@ -6,7 +6,7 @@ from sincronizar_sqlserver import PROCESOS, sincronizar
 
 
 class Command(BaseCommand):
-    help = 'Sincroniza los datos de SQL Server con Supabase (Opción 1: Inventario, Opción 2: FruDetalleVentas)'
+    help = 'Sincroniza los datos de SQL Server con Supabase (Opción 1: Inventario, 2: FruDetalleVentas, 3: Proceso de maquila)'
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -14,13 +14,14 @@ class Command(BaseCommand):
             '-t',
             type=int,
             default=1,
-            help='1: Inventario (sp_frupa_inventario -> rep_eye_inventario)\n2: Detalle de Ventas (sp_fru_ventas_pivot -> rep_detalleventas)'
+            help='1: Inventario (sp_frupa_inventario -> rep_eye_inventario)\n2: Detalle de Ventas (sp_fru_ventas_pivot -> rep_detalleventas)\n'
+                 '3: Proceso de maquila (t_palet vs recepción -> rep_proceso_maquila)'
         )
 
     def handle(self, *args, **options):
         opcion = options['tabla']
         if opcion not in PROCESOS:
-            raise CommandError(f"Opción inválida: {opcion}. Usa 1 o 2.")
+            raise CommandError(f"Opción inválida: {opcion}. Usa {', '.join(map(str, PROCESOS))}.")
         try:
             sincronizar(opcion, salida=self.stdout.write)
         except Exception as e:

@@ -2,7 +2,7 @@
 Sube información de SQL Server a Supabase (Postgres) y deja registro en rep_bitacora_sincronizacion.
 
 No depende de Django: corre en cualquier equipo con Python 3.10+ y el driver ODBC "SQL Server".
-    python sincronizar_sqlserver.py 1      (1 = Inventario, 2 = Detalle de Ventas)
+    python sincronizar_sqlserver.py 1      (1 = Inventario, 2 = Detalle de Ventas, 3 = Proceso de maquila)
 
 Lee del .env (misma carpeta): SQL_SERVER, SQL_DATABASE, SQL_USER, SQL_PASSWORD y
 DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT (la conexión a Supabase del portal).
@@ -39,10 +39,105 @@ def consulta_ventas():
     return f"exec AgroSmart_FRUSA.dbo.sp_fru_ventas_pivot '{anio}0101', '{anio}1231', 1"
 
 
-# proceso -> (nombre, función que arma la consulta, tabla destino, columna de fecha para borrar solo el rango)
+def consulta_maquila():
+    """
+    Proceso de maquila de la temporada activa: lo que entregó el productor (recepción) contra lo que salió
+    del empaque (t_palet). Un renglón por estiba + producto + etiqueta y otro de "Diferencia de proceso"
+    por estiba (recibido - empacado - mermas), para que la suma de kilos de cada estiba sea lo recibido y el
+    "% del recibido" salga con porcentaje del total de la fila en la tabla dinámica.
+    kilos_recibidos y cajas_recibidas solo vienen en el renglón de diferencia (para sumarlos sin duplicar).
+    """
+    return """
+SET NOCOUNT ON;
+DECLARE @temporada CHAR(2), @empresa CHAR(2) = '00';
+SELECT TOP 1 @temporada = c_codigo_tem FROM dbo.t_temporada WITH (NOLOCK) WHERE c_activo_tem = '1' ORDER BY c_codigo_tem DESC;
+
+WITH Pal AS (
+    SELECT  pal.c_codigo_tem, pal.c_codigo_sel, pal.c_codigo_pro, pal.c_codigo_eti, pal.c_codigo_env,
+            n_bulxpa_pal = SUM(pal.n_bulxpa_pal)
+    FROM    dbo.t_palet pal WITH (NOLOCK)
+    WHERE   pal.c_codigo_tem = @temporada AND pal.c_codigo_emp = @empresa
+    GROUP BY pal.c_codigo_tem, pal.c_codigo_sel, pal.c_codigo_pro, pal.c_codigo_eti, pal.c_codigo_env
+),
+Cant AS (
+    SELECT  red.c_codigo_tem, red.c_codigo_sel,
+            Kilos = SUM(ISNULL(red.n_kilos_red, 0.0)),
+            Cajas = SUM(ISNULL(red.n_cajascorte_red, 0))
+    FROM    dbo.t_recepciondet red WITH (NOLOCK)
+    WHERE   red.c_codigo_tem = @temporada
+    GROUP BY red.c_codigo_tem, red.c_codigo_sel
+),
+Est AS (
+    SELECT  sel.c_codigo_tem, sel.c_codigo_sel,
+            fecha    = CAST(sel.d_fecha_sel AS DATE),
+            lote     = RTRIM(lot.c_codigo_lot) + ' ' + lot.v_nombre_lot,
+            huerta   = hue.v_nombre_hue,
+            dueno    = dno.v_nombre_dno,
+            cultivo  = cul.v_nombre_cul,
+            variedad = vari.v_nombre_var,
+            kilos_recibidos = Cant.Kilos,
+            cajas_recibidas = Cant.Cajas
+    FROM    dbo.t_seleccion sel WITH (NOLOCK)
+            INNER JOIN Cant ON Cant.c_codigo_sel = sel.c_codigo_sel AND Cant.c_codigo_tem = sel.c_codigo_tem
+            INNER JOIN dbo.t_lote lot WITH (NOLOCK) ON lot.c_codigo_lot = sel.c_codigo_lot AND lot.c_codigo_tem = sel.c_codigo_tem
+            INNER JOIN dbo.t_cultivo cul WITH (NOLOCK) ON cul.c_codigo_cul = lot.c_codigo_cul
+            INNER JOIN dbo.cosvariedad vari WITH (NOLOCK) ON vari.c_codigo_var = lot.c_codigo_var
+            LEFT  JOIN dbo.t_huerto hue WITH (NOLOCK) ON hue.c_codigo_hue = lot.c_codigo_hue
+            LEFT  JOIN dbo.t_duenio dno WITH (NOLOCK) ON dno.c_codigo_dno = hue.c_codigo_dno
+    WHERE   sel.c_codigo_tem = @temporada
+),
+Det AS (
+    SELECT  Est.c_codigo_sel,
+            -- Envase 03 (KILOGRAMOS / bins) = mermas y subproductos; lo demás es empaque
+            tipo         = CASE WHEN Pal.c_codigo_env = '03' THEN '2 Mermas y subproductos' ELSE '1 Empaque' END,
+            presentacion = CASE WHEN Pal.c_codigo_env = '03'                 THEN tam.v_nombre_tam
+                                WHEN cal.v_nombre_prc LIKE 'CHAROLA SELECTA%'  THEN 'Selecta charola'
+                                WHEN cal.v_nombre_prc LIKE 'CHAROLA COMERCIAL%' THEN 'Comercial charola'
+                                WHEN cal.v_nombre_prc LIKE 'BOLSA%'             THEN 'Bolsa'
+                                ELSE cal.v_nombre_prc END,
+            calidad  = cal.v_nombre_prc,
+            envase   = env.v_nombre_env,
+            etiqueta = RTRIM(eti.v_nombre_eti),
+            tamano   = tam.v_nombre_tam,
+            producto = pro.v_nombre_pro,
+            cajas    = CASE WHEN Pal.c_codigo_env = '03' THEN 0 ELSE Pal.n_bulxpa_pal END,
+            kilos    = pro.n_pesbul_pro * Pal.n_bulxpa_pal   -- peso promedio del producto
+    FROM    Pal
+            INNER JOIN Est ON Est.c_codigo_sel = Pal.c_codigo_sel AND Est.c_codigo_tem = Pal.c_codigo_tem
+            INNER JOIN dbo.t_producto pro WITH (NOLOCK) ON pro.c_codigo_pro = Pal.c_codigo_pro
+            INNER JOIN dbo.t_producto_calidad cal WITH (NOLOCK) ON cal.c_codigo_prc = pro.c_codigo_prc
+            INNER JOIN dbo.t_tamanio tam WITH (NOLOCK) ON tam.c_codigo_tam = pro.c_codigo_tam
+            INNER JOIN dbo.t_etiqueta eti WITH (NOLOCK) ON eti.c_codigo_eti = Pal.c_codigo_eti
+            INNER JOIN dbo.t_envase env WITH (NOLOCK) ON env.c_codigo_env = Pal.c_codigo_env
+),
+Todo AS (
+    SELECT  c_codigo_sel, tipo, presentacion, calidad, envase, etiqueta, tamano, producto, cajas, kilos,
+            kilos_recibidos = CAST(0 AS DECIMAL(18, 2)), cajas_recibidas = 0
+    FROM    Det
+    UNION ALL
+    -- Diferencia de proceso por estiba (también las estibas que aún no tienen tarimas)
+    SELECT  Est.c_codigo_sel, '3 Diferencia de proceso', 'Diferencia de proceso', NULL, NULL, NULL, NULL, NULL, 0,
+            Est.kilos_recibidos - ISNULL((SELECT SUM(d.kilos) FROM Det d WHERE d.c_codigo_sel = Est.c_codigo_sel), 0),
+            Est.kilos_recibidos, Est.cajas_recibidas
+    FROM    Est
+)
+SELECT  temporada = Est.c_codigo_tem, estiba = Est.c_codigo_sel, Est.fecha, Est.lote, Est.huerta, Est.dueno,
+        Est.cultivo, Est.variedad, Todo.tipo, Todo.presentacion, Todo.calidad, Todo.envase, Todo.etiqueta,
+        Todo.tamano, Todo.producto, Todo.cajas, Todo.kilos, Todo.kilos_recibidos, Todo.cajas_recibidas
+FROM    Todo
+        INNER JOIN Est ON Est.c_codigo_sel = Todo.c_codigo_sel
+ORDER BY Est.c_codigo_sel, Todo.tipo, Todo.presentacion, Todo.tamano;
+"""
+
+
+# proceso -> (nombre, función que arma la consulta, tabla destino, qué se borra antes de insertar):
+#   None          = toda la tabla
+#   "columna"     = las fechas del año en curso en esa columna
+#   ("columna",)  = solo los valores de esa columna que trae la consulta (p. ej. la temporada activa)
 PROCESOS = {
     1: ("Inventario", consulta_inventario, "rep_eye_inventario", None),
     2: ("Detalle de Ventas", consulta_ventas, "rep_detalleventas", "FechaFac"),
+    3: ("Proceso de maquila", consulta_maquila, "rep_proceso_maquila", ("temporada",)),
 }
 
 
@@ -96,7 +191,7 @@ class Bitacora:
 def sincronizar(proceso, salida=print):
     """Ejecuta un proceso completo. Devuelve los registros subidos; lanza la excepción si falla."""
     if proceso not in PROCESOS:
-        raise ValueError(f"Opción inválida: {proceso}. Usa 1 o 2.")
+        raise ValueError(f"Opción inválida: {proceso}. Usa {', '.join(map(str, PROCESOS))}.")
     nombre, armar_consulta, tabla, campo_fecha = PROCESOS[proceso]
 
     bitacora = Bitacora(proceso, nombre, tabla)
@@ -123,7 +218,11 @@ def sincronizar(proceso, salida=print):
         try:
             # Borrado e inserción en una sola transacción: si algo falla, la tabla queda como estaba
             with pg, pg.cursor() as cur:
-                if campo_fecha:
+                if isinstance(campo_fecha, tuple):
+                    posicion = columnas.index(campo_fecha[0])
+                    valores = sorted({f[posicion] for f in filas})
+                    cur.execute(f'DELETE FROM public."{tabla}" WHERE "{campo_fecha[0]}" = ANY(%s)', [valores])
+                elif campo_fecha:
                     anio = date.today().year
                     cur.execute(
                         f'DELETE FROM public."{tabla}" WHERE "{campo_fecha}"::date BETWEEN %s AND %s',

@@ -40,6 +40,7 @@ class Pivot_Dinamico(models.Model):
         permissions = [
             ("ver_inventario_pivot", "Puede ver el reporte: Inventario Pivot"),
             ("ver_ventas_pivot", "Puede ver el reporte: Ventas Pivot"),
+            ("ver_proceso_maquila_pivot", "Puede ver el reporte: Proceso de maquila"),
             # Puedes ir agregando aquí permisos para otros reportes que crees a futuro
         ]
 
