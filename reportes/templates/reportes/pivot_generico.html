@@ -258,10 +258,11 @@
                         <span>Imprimir</span>
                     </button>
 
-                    <button type="button" id="btn-subtotales-win" class="btn-toolbar-win" title="Mostrar u ocultar subtotales">
+                    <button type="button" id="btn-subtotales-win" class="btn-toolbar-win" title="Subtotales de renglones y de columnas">
                         <i class="dx-icon-variable text-amber-600"></i>
                         <span>SubTotal</span>
                     </button>
+                    <div id="menu-subtotales"></div>
 
                     <button type="button" id="btn-chart-win" class="btn-toolbar-win" title="Mostrar u ocultar gráfica">
                         <i class="dx-icon-chart text-purple-600"></i>
@@ -489,7 +490,7 @@
                 // Orden natural en filas/columnas: primero los números como números (56, 64 ... 216)
                 // y luego el texto (CANICA, CONTRADESECHO...). Se desactiva con "ordenNatural": false.
                 delete fieldObj.ordenNatural;
-                if (!fieldObj.isMeasure && !f.cociente && f.dataType !== "date" && f.ordenNatural !== false) {
+                if (!fieldObj.isMeasure && !f.cociente && !f.porcentajeDe && f.dataType !== "date" && f.ordenNatural !== false) {
                     fieldObj.sortingMethod = compararNatural;
                 }
 
@@ -519,6 +520,42 @@
                             var t = opciones.totalValue;
                             opciones.totalValue = (t.n === 0 || t.d === 0) ? 0 : t.n / t.d;
                         }
+                    };
+                }
+
+                // Porcentaje contra el total del renglón de otro campo: cada celda = numerador de la celda entre el
+                // denominador del total del renglón (columna Gran Total). Sirve cuando el denominador viene una sola
+                // vez por grupo (kilos recibidos solo en el primer renglón de cada estiba): en cualquier celda de
+                // Empaque, Mermas o un tamaño, el % es contra todo lo recibido por las estibas de ese renglón.
+                // {"caption":"% del recibido","porcentajeDe":{"numerador":"Kilos","denominador":"KilosRecibidos"},
+                //  "format":{"type":"percent","precision":2}}
+                // El desglose (Tipo, Presentación, Tamaño) debe ir en columnas; los grupos (Dueño, Estiba) en renglones.
+                if (f.porcentajeDe) {
+                    var numeradorPct = f.porcentajeDe.numerador;
+                    var denominadorPct = f.porcentajeDe.denominador;
+                    delete fieldObj.porcentajeDe;
+                    delete fieldObj.dataField;
+                    fieldObj.name = f.name || ("porcentaje_" + numeradorPct + "_" + denominadorPct);
+                    fieldObj.dataType = "number";
+                    fieldObj.isMeasure = true;
+                    fieldObj.summaryType = "custom";
+                    fieldObj.selector = function(fila) {
+                        return { n: Number(fila[numeradorPct]) || 0, d: Number(fila[denominadorPct]) || 0 };
+                    };
+                    fieldObj.calculateCustomSummary = function(opciones) {
+                        if (opciones.summaryProcess === "start") {
+                            opciones.totalValue = { n: 0, d: 0 };
+                        } else if (opciones.summaryProcess === "calculate") {
+                            opciones.totalValue.n += opciones.value.n;
+                            opciones.totalValue.d += opciones.value.d;
+                        }
+                    };
+                    fieldObj.calculateSummaryValue = function(celda) {
+                        var valor = celda.value();
+                        var totalRenglon = celda.grandTotal("column") || celda;
+                        var base = totalRenglon.value();
+                        if (!valor || !base || !base.d) return null;
+                        return valor.n / base.d;
                     };
                 }
 
@@ -632,9 +669,11 @@
 
                 showBorders: true,
                 // Subtotales al abrir: el formato base puede apagarlos con "showRowTotals": false
-                // (equivale a OptionsView.ShowRowTotals del PivotGrid de Windows); el botón SubTotal los cambia
+                // (equivale a OptionsView.ShowRowTotals del PivotGrid de Windows) y, aparte, los de columnas con
+                // "showColumnTotals" (si no viene, igual que los de renglones); el botón SubTotal los cambia
                 showRowTotals: configBase.showRowTotals !== false,
-                showColumnTotals: configBase.showRowTotals !== false,
+                showColumnTotals: configBase.showColumnTotals !== undefined ? configBase.showColumnTotals !== false
+                                                                            : configBase.showRowTotals !== false,
                 showRowGrandTotals: true,
                 showColumnGrandTotals: true,
 
@@ -1583,15 +1622,31 @@
                 $btnActualizar.prop("disabled", false).removeClass("opacity-50 cursor-wait");
             }
 
-            // 3. EVENTO MOSTRAR/OCULTAR SUBTOTALES
-            $("#btn-subtotales-win").on("click", function() {
-                var showSubtotals = !pivotGrid.option("showRowTotals");
-                pivotGrid.option("showRowTotals", showSubtotals);
-                pivotGrid.option("showColumnTotals", showSubtotals);
-                
-                $(this).toggleClass("bg-amber-100 border-amber-400", showSubtotals);
-            });
-            $("#btn-subtotales-win").toggleClass("bg-amber-100 border-amber-400", pivotGrid.option("showRowTotals"));
+            // 3. SUBTOTALES: el botón abre un menú para prenderlos/apagarlos por separado en renglones
+            // (showRowTotals) y en columnas (showColumnTotals). Resaltado si hay alguno prendido.
+            var opcionesSubtotal = [
+                { text: "Subtotales de renglones", opcion: "showRowTotals" },
+                { text: "Subtotales de columnas", opcion: "showColumnTotals" }
+            ];
+            function pintarSubtotales() {
+                opcionesSubtotal.forEach(function(item) {
+                    item.icon = pivotGrid.option(item.opcion) ? "check" : "square";
+                });
+                var alguno = opcionesSubtotal.some(function(item) { return pivotGrid.option(item.opcion); });
+                $("#btn-subtotales-win").toggleClass("bg-amber-100 border-amber-400", alguno);
+            }
+            pintarSubtotales();
+            var menuSubtotales = $("#menu-subtotales").dxContextMenu({
+                dataSource: opcionesSubtotal,
+                target: "#btn-subtotales-win",
+                showEvent: "dxclick",
+                position: { my: "left top", at: "left bottom", of: "#btn-subtotales-win" },
+                onItemClick: function(e) {
+                    pivotGrid.option(e.itemData.opcion, !pivotGrid.option(e.itemData.opcion));
+                    pintarSubtotales();
+                    menuSubtotales.option("dataSource", opcionesSubtotal.slice());  // vuelve a dibujar las palomitas
+                }
+            }).dxContextMenu("instance");
 
             // 4. EVENTO MOSTRAR/OCULTAR GRÁFICA
             var chart = $("#pivotgrid-chart").dxChart({

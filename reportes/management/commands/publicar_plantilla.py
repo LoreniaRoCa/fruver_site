@@ -34,6 +34,9 @@ def clave_campo(campo):
     if campo.get('cociente'):
         c = campo['cociente']
         return f"cociente_{c.get('numerador')}_{c.get('denominador')}"
+    if campo.get('porcentajeDe'):
+        c = campo['porcentajeDe']
+        return f"porcentaje_{c.get('numerador')}_{c.get('denominador')}"
     return campo.get('dataField') or campo.get('FieldName')
 
 
