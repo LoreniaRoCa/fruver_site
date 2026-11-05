@@ -1,0 +1,639 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tablero de maquila</title>
+    <link rel="stylesheet" href="https://cdn3.devexpress.com/jslib/23.2.5/css/dx.light.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        html, body { margin: 0; height: 100%; background: #f1f5f9; color: #1e293b;
+                     font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size: 13px; }
+        .verde { color: #476b32; } .bg-verde { background: #476b32; } .borde-verde { border-color: #72a651; }
+        .tarjeta { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; }
+        .pestana { padding: 6px 14px; border-radius: 999px; font-weight: 600; color: #475569; cursor: pointer; }
+        .pestana.activa { background: #476b32; color: #fff; }
+        .dueno { display: block; width: 100%; text-align: left; padding: 9px 10px; border-radius: 8px; border: 1px solid transparent; }
+        .dueno:hover { background: #f2f7f0; }
+        .dueno.activo { background: #f2f7f0; border-color: #72a651; }
+        .proceso { display: block; width: 100%; text-align: left; padding: 10px 12px; border-radius: 10px; border: 1px solid #e2e8f0; background: #fff; }
+        .proceso:hover { border-color: #72a651; box-shadow: 0 2px 10px rgba(71, 107, 50, .12); }
+        .proceso.activo { border-color: #476b32; box-shadow: 0 0 0 2px #cfe7c2; }
+        .barra { height: 6px; border-radius: 999px; background: #e2e8f0; overflow: hidden; display: flex; }
+        .barra span { display: block; height: 100%; }
+        .kpi { padding: 12px 14px; }
+        .kpi .valor { font-size: 20px; font-weight: 700; }
+        .kpi .etq { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #64748b; }
+        .seccion { font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: #476b32;
+                   border-bottom: 2px solid #cfe7c2; padding-bottom: 4px; margin: 14px 0 6px; }
+        .tabla-ficha { width: 100%; border-collapse: collapse; }
+        .tabla-ficha td, .tabla-ficha th { padding: 5px 6px; border-bottom: 1px solid #f1f5f9; }
+        .tabla-ficha th { text-align: left; font-size: 11px; color: #64748b; font-weight: 600; }
+        .tabla-ficha .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+        .tabla-ficha tr.total td { font-weight: 700; border-top: 2px solid #cbd5e1; border-bottom: 0; }
+        .dato-ficha { display: flex; gap: 6px; padding: 3px 0; }
+        .dato-ficha .e { color: #64748b; min-width: 118px; }
+        .boton { display: inline-flex; align-items: center; gap: 4px; border: 1px solid #cbd5e1; background: #fff; border-radius: 6px;
+                 padding: 5px 10px; font-weight: 600; font-size: 12px; color: #334155; cursor: pointer; }
+        .boton:hover { border-color: #72a651; color: #476b32; }
+        .scroll { overflow-y: auto; }
+        .vacio { color: #94a3b8; text-align: center; padding: 40px 10px; }
+        @media print {
+            body { background: #fff; }
+            body * { visibility: hidden; }
+            #ficha, #ficha * { visibility: visible; }
+            #ficha { position: absolute; left: 0; top: 0; width: 100%; border: 0; }
+            .no-imprimir { display: none !important; }
+        }
+    </style>
+</head>
+<body>
+<div class="h-full flex flex-col">
+    <!-- Barra superior -->
+    <header class="no-imprimir bg-white border-b border-slate-200 px-4 py-2 flex flex-wrap items-center gap-3">
+        <div class="mr-2">
+            <div class="font-bold text-base verde">Tablero de maquila</div>
+            <div class="text-xs text-slate-500">{{ nombre_empresa }}</div>
+        </div>
+        <div class="flex gap-1 bg-slate-100 rounded-full p-1">
+            <span class="pestana activa" data-vista="productor">Por productor</span>
+            <span class="pestana" data-vista="general">General</span>
+        </div>
+        <div class="flex items-center gap-2 ml-auto">
+            <div id="periodo" style="width: 160px"></div>
+            <span class="text-slate-500 font-semibold">Del</span><div id="fecha-inicio" style="width: 135px"></div>
+            <span class="text-slate-500 font-semibold">Al</span><div id="fecha-fin" style="width: 135px"></div>
+            <button type="button" class="boton" id="btn-actualizar"><i class="dx-icon-refresh"></i>Actualizar</button>
+            <button type="button" class="boton" id="btn-cerrar"><i class="dx-icon-close"></i>Cerrar</button>
+        </div>
+    </header>
+
+    <!-- Vista: por productor -->
+    <main id="vista-productor" class="flex-1 min-h-0 flex gap-3 p-3">
+        <section class="no-imprimir tarjeta w-72 flex flex-col min-h-0">
+            <div class="p-3 border-b border-slate-100">
+                <div class="font-semibold mb-2">Productores <span id="total-duenos" class="text-slate-400 font-normal"></span></div>
+                <div id="buscar-dueno"></div>
+            </div>
+            <div id="lista-duenos" class="scroll flex-1 p-2"></div>
+        </section>
+
+        <section class="no-imprimir w-96 flex flex-col min-h-0 gap-3">
+            <div id="resumen-dueno" class="tarjeta p-3"></div>
+            <div id="lista-procesos" class="scroll flex-1 flex flex-col gap-2 pr-1"></div>
+        </section>
+
+        <section class="flex-1 min-w-0 flex flex-col min-h-0">
+            <div class="no-imprimir flex flex-wrap gap-2 mb-2" id="acciones-ficha" style="visibility: hidden">
+                <button type="button" class="boton" id="btn-copiar-texto"><i class="dx-icon-copy"></i>Copiar texto (WhatsApp)</button>
+                <button type="button" class="boton" id="btn-copiar-imagen"><i class="dx-icon-image"></i>Copiar imagen</button>
+                <button type="button" class="boton" id="btn-descargar-imagen"><i class="dx-icon-download"></i>Descargar imagen</button>
+                <button type="button" class="boton" id="btn-imprimir"><i class="dx-icon-print"></i>Imprimir / PDF</button>
+            </div>
+            <div class="scroll flex-1">
+                <div id="ficha" class="tarjeta p-5"><div class="vacio">Selecciona un productor y uno de sus procesos.</div></div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Vista: general -->
+    <main id="vista-general" class="flex-1 min-h-0 scroll p-3" style="display: none">
+        <div id="kpis-generales" class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-3"></div>
+        <div class="grid grid-cols-1 xl:grid-cols-2 gap-3 mb-3">
+            <div class="tarjeta p-3"><div class="font-semibold mb-1">Productores que más maquilaron (kg recibidos)</div><div id="g-productores" style="height: 360px"></div></div>
+            <div class="tarjeta p-3"><div class="font-semibold mb-1">Kg recibidos por variedad</div><div id="g-variedades" style="height: 360px"></div></div>
+            <div class="tarjeta p-3"><div class="font-semibold mb-1">Cajas empacadas por presentación</div><div id="g-presentaciones" style="height: 300px"></div></div>
+            <div class="tarjeta p-3"><div class="font-semibold mb-1">Cajas empacadas por tamaño</div><div id="g-tamanos" style="height: 300px"></div></div>
+            <div class="tarjeta p-3 xl:col-span-2"><div class="font-semibold mb-1">Recepción y rendimiento por semana</div><div id="g-semanas" style="height: 300px"></div></div>
+        </div>
+        <div class="tarjeta p-3"><div class="font-semibold mb-2">Ranking de productores</div><div id="g-ranking"></div></div>
+    </main>
+</div>
+<div id="carga"></div>
+
+{{ fecha_inicio|json_script:"dato-fecha-inicio" }}
+{{ fecha_fin|json_script:"dato-fecha-fin" }}
+{{ logo_empresa_url|json_script:"dato-logo" }}
+{{ nombre_empresa|json_script:"dato-empresa" }}
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdn3.devexpress.com/jslib/23.2.5/js/dx.all.js"></script>
+<script src="https://cdn3.devexpress.com/jslib/23.2.5/js/localization/dx.messages.es.js"></script>
+<script>
+$(function() {
+    DevExpress.localization.locale("es-MX");  // como las tablas dinámicas: textos en español, números 1,234.56
+    var URL_DATOS = "{% url 'reportes:datos_maquila' %}";
+    var LOGO = JSON.parse(document.getElementById("dato-logo").textContent);
+    var EMPRESA = JSON.parse(document.getElementById("dato-empresa").textContent);
+    var COLORES = ["#476b32", "#72a651", "#a3c585", "#e0b43a", "#d9822b", "#b5523b", "#6b8fb3", "#8a6bb3", "#94a3b8"];
+
+    // ------------------------------------------------------------------ formato
+    var fmt2 = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    var fmt0 = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
+    function n2(v) { return fmt2.format(v || 0); }
+    function n0(v) { return fmt0.format(Math.round(v || 0)); }
+    function pct(v) { return isFinite(v) ? fmt2.format(v * 100) + "%" : "—"; }
+    function fechaTexto(iso) { return iso ? iso.slice(8, 10) + "/" + iso.slice(5, 7) + "/" + iso.slice(0, 4) : ""; }
+    function esc(t) { return $("<div>").text(t == null ? "" : String(t)).html(); }
+    function sinNumero(t) { return String(t || "").replace(/^\s*\d+\s+/, "").trim(); }       // "05 Granny Smith" -> "Granny Smith"
+    function oracion(t) { t = String(t || "").toLowerCase(); return t.charAt(0).toUpperCase() + t.slice(1); }
+    function compararNatural(a, b) {
+        var na = /^\d+$/.test(a), nb = /^\d+$/.test(b);
+        if (na && nb) return Number(a) - Number(b);
+        if (na !== nb) return na ? -1 : 1;
+        return String(a).localeCompare(String(b));
+    }
+
+    // ------------------------------------------------------------------ datos
+    var procesos = [], duenos = [], duenoActivo = null, procesoActivo = null;
+
+    function nuevoAcumulado() {
+        return { kgRec: 0, cajasRec: 0, empaque: {}, mermas: {}, tamanos: {}, kgEmp: 0, cajasEmp: 0, kgMer: 0, bultosMer: 0 };
+    }
+    function sumarRenglon(acc, r) {
+        acc.kgRec += r.KilosRecibidos || 0;
+        acc.cajasRec += r.CajasRecibidas || 0;
+        var esEmpaque = r.Tipo === "Empaque";
+        var grupo = esEmpaque ? acc.empaque : acc.mermas;
+        var nombre = r["Presentación"] || "Sin presentación";
+        grupo[nombre] = grupo[nombre] || { cajas: 0, kilos: 0 };
+        grupo[nombre].cajas += r.Cajas || 0;
+        grupo[nombre].kilos += r.Kilos || 0;
+        if (esEmpaque) {
+            acc.kgEmp += r.Kilos || 0; acc.cajasEmp += r.Cajas || 0;
+            var tam = r["Tamaño"] || "—";
+            acc.tamanos[tam] = acc.tamanos[tam] || {};
+            acc.tamanos[tam][nombre] = (acc.tamanos[tam][nombre] || 0) + (r.Cajas || 0);
+        } else {
+            acc.kgMer += r.Kilos || 0; acc.bultosMer += r.Cajas || 0;
+        }
+    }
+    function sumarAcumulado(destino, origen) {
+        ["kgRec", "cajasRec", "kgEmp", "cajasEmp", "kgMer", "bultosMer"].forEach(function(k) { destino[k] += origen[k]; });
+        ["empaque", "mermas"].forEach(function(g) {
+            Object.keys(origen[g]).forEach(function(p) {
+                destino[g][p] = destino[g][p] || { cajas: 0, kilos: 0 };
+                destino[g][p].cajas += origen[g][p].cajas; destino[g][p].kilos += origen[g][p].kilos;
+            });
+        });
+        Object.keys(origen.tamanos).forEach(function(t) {
+            destino.tamanos[t] = destino.tamanos[t] || {};
+            Object.keys(origen.tamanos[t]).forEach(function(p) { destino.tamanos[t][p] = (destino.tamanos[t][p] || 0) + origen.tamanos[t][p]; });
+        });
+    }
+
+    function prepararDatos(respuesta) {
+        var cols = respuesta.columnas, porEstiba = {};
+        respuesta.filas.forEach(function(fila) {
+            var r = {};
+            cols.forEach(function(c, i) { r[c] = fila[i]; });
+            var p = porEstiba[r.Estiba];
+            if (!p) {
+                p = porEstiba[r.Estiba] = Object.assign(nuevoAcumulado(), {
+                    estiba: r.Estiba, fecha: r.Fecha, lote: r.Lote, huerta: r.Huerta, dueno: r["Dueño"] || "Sin dueño",
+                    variedad: sinNumero(r.Variedad), cultivo: r.Cultivo });
+            }
+            sumarRenglon(p, r);
+        });
+        procesos = Object.keys(porEstiba).map(function(k) { return porEstiba[k]; })
+            .sort(function(a, b) { return a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : 0; });
+
+        var porDueno = {};
+        procesos.forEach(function(p) {
+            var d = porDueno[p.dueno] = porDueno[p.dueno] || Object.assign(nuevoAcumulado(), { nombre: p.dueno, procesos: [], variedades: {} });
+            d.procesos.push(p); d.variedades[p.variedad] = true;
+            sumarAcumulado(d, p);
+        });
+        duenos = Object.keys(porDueno).map(function(k) { return porDueno[k]; }).sort(function(a, b) { return b.kgRec - a.kgRec; });
+    }
+
+    // ------------------------------------------------------------------ vista por productor
+    function barraRendimiento(acc) {
+        var emp = acc.kgRec ? acc.kgEmp / acc.kgRec : 0, mer = acc.kgRec ? acc.kgMer / acc.kgRec : 0;
+        return '<div class="barra mt-1" title="Empaque ' + pct(emp) + ' · Mermas ' + pct(mer) + '">' +
+               '<span style="width:' + Math.min(emp * 100, 100) + '%;background:#72a651"></span>' +
+               '<span style="width:' + Math.min(mer * 100, 100) + '%;background:#e0b43a"></span></div>';
+    }
+
+    function pintarDuenos() {
+        var texto = (buscador.option("value") || "").toLowerCase();
+        var visibles = duenos.filter(function(d) { return !texto || d.nombre.toLowerCase().indexOf(texto) !== -1; });
+        $("#total-duenos").text("(" + duenos.length + ")");
+        if (!visibles.length) { $("#lista-duenos").html('<div class="vacio">Sin productores en el periodo.</div>'); return; }
+        $("#lista-duenos").html(visibles.map(function(d) {
+            return '<button type="button" class="dueno' + (d === duenoActivo ? ' activo' : '') + '" data-dueno="' + esc(d.nombre) + '">' +
+                '<div class="font-semibold leading-tight">' + esc(d.nombre) + '</div>' +
+                '<div class="text-[11px] text-slate-500 mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis">' + d.procesos.length + (d.procesos.length === 1 ? ' proceso' : ' procesos') +
+                ' · ' + n2(d.kgRec) + ' kg · ' + pct(d.kgRec ? d.kgEmp / d.kgRec : 0) + ' empaque</div>' + barraRendimiento(d) + '</button>';
+        }).join(""));
+    }
+
+    function pintarProcesos() {
+        var d = duenoActivo;
+        if (!d) {
+            $("#resumen-dueno").html('<div class="text-slate-400">Selecciona un productor.</div>');
+            $("#lista-procesos").empty();
+            return;
+        }
+        $("#resumen-dueno").html(
+            '<div class="font-bold text-sm leading-tight">' + esc(d.nombre) + '</div>' +
+            '<div class="text-xs text-slate-500 mb-2">' + Object.keys(d.variedades).map(esc).join(", ") + '</div>' +
+            '<div class="grid grid-cols-3 gap-2 text-center">' +
+            '<div><div class="font-bold">' + d.procesos.length + '</div><div class="text-[11px] text-slate-500">Procesos</div></div>' +
+            '<div><div class="font-bold">' + n0(d.cajasRec) + '</div><div class="text-[11px] text-slate-500">Cajas recibidas</div></div>' +
+            '<div><div class="font-bold">' + n0(d.kgRec) + '</div><div class="text-[11px] text-slate-500">Kg recibidos</div></div></div>' +
+            barraRendimiento(d) +
+            '<div class="flex justify-between text-[11px] text-slate-500 mt-1"><span>Empaque ' + pct(d.kgRec ? d.kgEmp / d.kgRec : 0) +
+            '</span><span>Mermas ' + pct(d.kgRec ? d.kgMer / d.kgRec : 0) + '</span></div>' +
+            '<button type="button" class="boton w-full justify-center mt-2' + (procesoActivo === "concentrado" ? ' borde-verde verde' : '') +
+            '" id="btn-concentrado"><i class="dx-icon-detailslayout"></i>Ficha concentrada del productor</button>');
+
+        $("#lista-procesos").html(d.procesos.map(function(p) {
+            return '<button type="button" class="proceso' + (p === procesoActivo ? ' activo' : '') + '" data-estiba="' + esc(p.estiba) + '">' +
+                '<div class="flex justify-between items-baseline"><span class="font-bold">📋 ' + esc(p.estiba) + '</span>' +
+                '<span class="text-xs text-slate-500">📅 ' + fechaTexto(p.fecha) + '</span></div>' +
+                '<div class="text-xs text-slate-500 mb-1">' + esc(p.variedad) + '</div>' +
+                '<div class="grid grid-cols-3 gap-1 text-xs whitespace-nowrap">' +
+                '<div>📦 <b>' + n0(p.cajasRec) + '</b> cajas</div>' +
+                '<div>⚖️ <b>' + n2(p.cajasRec ? p.kgRec / p.cajasRec : 0) + '</b> kg/caja</div>' +
+                '<div>📊 <b>' + n2(p.kgRec) + '</b> kg</div></div>' + barraRendimiento(p) + '</button>';
+        }).join(""));
+    }
+
+    function filasDesglose(grupo, total, esEmpaque) {
+        return Object.keys(grupo).sort(function(a, b) { return grupo[b].kilos - grupo[a].kilos; }).map(function(nombre) {
+            var g = grupo[nombre];
+            return { nombre: oracion(nombre), cajas: g.cajas, kilos: g.kilos, pct: total ? (esEmpaque ? g.cajas : g.kilos) / total : 0 };
+        });
+    }
+
+    // Ficha de un proceso o concentrada de un productor (acc = proceso o dueño)
+    function pintarFicha() {
+        var acc = procesoActivo === "concentrado" ? duenoActivo : procesoActivo;
+        $("#acciones-ficha").css("visibility", acc ? "visible" : "hidden");
+        if (!acc) { $("#ficha").html('<div class="vacio">Selecciona un productor y uno de sus procesos.</div>'); return; }
+        var concentrado = procesoActivo === "concentrado";
+        var empaque = filasDesglose(acc.empaque, acc.cajasEmp, true);
+        var mermas = filasDesglose(acc.mermas, acc.kgMer, false);
+        var producto = concentrado ? Object.keys(acc.variedades).join(", ") : acc.variedad;
+
+        var datos = concentrado ? [
+            ["🍏 Producto", "Manzana (" + producto + ")"], ["👤 Dueño", acc.nombre],
+            ["🆔 Procesos", acc.procesos.length], ["📅 Periodo", fechaTexto(isoDe(fechaInicio)) + " al " + fechaTexto(isoDe(fechaFin))],
+            ["📦 Cajas recibidas", n0(acc.cajasRec)], ["⚖️ Prom. por caja", n2(acc.cajasRec ? acc.kgRec / acc.cajasRec : 0) + " kg"],
+            ["📊 Total kgs recibidos", n2(acc.kgRec) + " kg"]
+        ] : [
+            ["🍏 Producto", "Manzana (" + producto + ")"], ["🆔 Estiba", acc.estiba], ["🆔 Lote", acc.lote],
+            ["👤 Dueño", acc.dueno], ["📍 Huerta", acc.huerta], ["📦 Cajas recibidas", n0(acc.cajasRec)],
+            ["⚖️ Prom. por caja", n2(acc.cajasRec ? acc.kgRec / acc.cajasRec : 0) + " kg"],
+            ["📊 Total kgs recibidos", n2(acc.kgRec) + " kg"], ["📅 Fecha", fechaTexto(acc.fecha)]
+        ];
+
+        var html = '<div class="flex justify-between items-start gap-4">' +
+            '<div><div class="text-lg font-bold verde">📋 ' + (concentrado ? "Concentrado de maquila" : "Resumen de proceso de maquila") + '</div>' +
+            '<div class="text-xs text-slate-500">' + esc(EMPRESA) + '</div></div>' +
+            (LOGO ? '<img src="' + esc(LOGO) + '" alt="" style="max-height:48px;max-width:150px">' : '') + '</div>' +
+            '<div class="grid grid-cols-1 lg:grid-cols-2 gap-x-6 mt-3">' +
+            '<div>' + datos.map(function(d) { return '<div class="dato-ficha"><span class="e">' + d[0] + ':</span><b>' + esc(d[1]) + '</b></div>'; }).join("") + '</div>' +
+            '<div id="f-destino" style="height: 210px"></div></div>' +
+
+            '<div class="seccion">📦 Desglose de empaque</div>' +
+            '<table class="tabla-ficha"><tr><th>Presentación</th><th class="num">Cajas</th><th class="num">% cajas</th><th class="num">Kilos</th><th class="num">% del recibido</th></tr>' +
+            empaque.map(function(f) {
+                return '<tr><td>' + esc(f.nombre) + '</td><td class="num">' + n0(f.cajas) + '</td><td class="num">' + pct(f.pct) +
+                       '</td><td class="num">' + n2(f.kilos) + '</td><td class="num">' + pct(acc.kgRec ? f.kilos / acc.kgRec : 0) + '</td></tr>';
+            }).join("") +
+            '<tr class="total"><td>🔷 Total cajas</td><td class="num">' + n0(acc.cajasEmp) + '</td><td class="num">100.00%</td><td class="num">' +
+            n2(acc.kgEmp) + '</td><td class="num">' + pct(acc.kgRec ? acc.kgEmp / acc.kgRec : 0) + '</td></tr></table>' +
+
+            '<div class="seccion">🗑️ Mermas y subproductos</div>' +
+            '<table class="tabla-ficha"><tr><th>Concepto</th><th class="num">Kilos</th><th class="num">Bultos</th><th class="num">% del recibido</th></tr>' +
+            mermas.map(function(f) {
+                return '<tr><td>' + esc(f.nombre) + '</td><td class="num">' + n2(f.kilos) + '</td><td class="num">' + n0(f.cajas) +
+                       '</td><td class="num">' + pct(acc.kgRec ? f.kilos / acc.kgRec : 0) + '</td></tr>';
+            }).join("") +
+            '<tr class="total"><td>🔶 Total desecho</td><td class="num">' + n2(acc.kgMer) + '</td><td class="num">' + n0(acc.bultosMer) +
+            '</td><td class="num">' + pct(acc.kgRec ? acc.kgMer / acc.kgRec : 0) + '</td></tr></table>' +
+
+            '<div class="seccion">📐 Cajas por tamaño</div><div id="f-tamanos" style="height: 230px"></div>';
+
+        if (concentrado) {
+            html += '<div class="seccion">🆔 Procesos</div><table class="tabla-ficha"><tr><th>Estiba</th><th>Fecha</th><th>Variedad</th>' +
+                '<th class="num">Cajas rec.</th><th class="num">Kg recibidos</th><th class="num">Cajas emp.</th><th class="num">% empaque</th><th class="num">% mermas</th></tr>' +
+                acc.procesos.map(function(p) {
+                    return '<tr><td>' + esc(p.estiba) + '</td><td>' + fechaTexto(p.fecha) + '</td><td>' + esc(p.variedad) + '</td><td class="num">' +
+                        n0(p.cajasRec) + '</td><td class="num">' + n2(p.kgRec) + '</td><td class="num">' + n0(p.cajasEmp) + '</td><td class="num">' +
+                        pct(p.kgRec ? p.kgEmp / p.kgRec : 0) + '</td><td class="num">' + pct(p.kgRec ? p.kgMer / p.kgRec : 0) + '</td></tr>';
+                }).join("") + '</table>';
+        }
+        $("#ficha").html(html);
+
+        // Destino de la fruta (kg): presentaciones de empaque y mermas
+        $("#f-destino").dxPieChart({
+            type: "doughnut", palette: COLORES, innerRadius: 0.6, animation: false,
+            dataSource: empaque.concat(mermas).map(function(f) { return { nombre: f.nombre, kilos: f.kilos }; }),
+            series: { argumentField: "nombre", valueField: "kilos", label: { visible: false } },
+            legend: { horizontalAlignment: "right", verticalAlignment: "center", font: { size: 11 } },
+            tooltip: { enabled: true, customizeTooltip: function(a) { return { text: a.argumentText + ": " + n2(a.value) + " kg (" + pct(a.percent) + ")" }; } },
+            title: { text: "Destino de la fruta (kg)", font: { size: 12, weight: 600 } }
+        });
+        var presentaciones = empaque.map(function(f) { return f.nombre; });
+        var datosTam = Object.keys(acc.tamanos).sort(compararNatural).map(function(t) {
+            var fila = { tamano: t };
+            Object.keys(acc.tamanos[t]).forEach(function(p) { fila[oracion(p)] = acc.tamanos[t][p]; });
+            return fila;
+        });
+        $("#f-tamanos").dxChart({
+            dataSource: datosTam, palette: COLORES, animation: false,
+            commonSeriesSettings: { argumentField: "tamano", type: "stackedBar" },
+            series: presentaciones.map(function(p) { return { valueField: p, name: p }; }),
+            legend: { verticalAlignment: "top", horizontalAlignment: "center", font: { size: 11 } },
+            argumentAxis: { label: { font: { size: 11 } } },
+            tooltip: { enabled: true, customizeTooltip: function(a) { return { text: a.seriesName + " " + a.argumentText + ": " + n0(a.value) + " cajas" }; } }
+        });
+    }
+
+    // Texto para WhatsApp, con el mismo formato que el reporte que ya se manda
+    function textoFicha() {
+        var concentrado = procesoActivo === "concentrado";
+        var acc = concentrado ? duenoActivo : procesoActivo;
+        var empaque = filasDesglose(acc.empaque, acc.cajasEmp, true);
+        var mermas = filasDesglose(acc.mermas, acc.kgMer, false);
+        var l = [concentrado ? "📋 CONCENTRADO DE MAQUILA 📋" : "📋 RESUMEN DE PROCESO DE MAQUILA 📋", ""];
+        if (concentrado) {
+            l.push("🍏 Producto: Manzana (" + Object.keys(acc.variedades).join(", ") + ")", "👤 Dueño: " + acc.nombre,
+                   "🆔 Procesos: " + acc.procesos.length, "📅 Periodo: " + fechaTexto(isoDe(fechaInicio)) + " al " + fechaTexto(isoDe(fechaFin)));
+        } else {
+            l.push("🍏 Producto: Manzana (" + acc.variedad + ")", "🆔 Estiba: " + acc.estiba, "🆔 Lote: " + acc.lote,
+                   "👤 Dueño: " + acc.dueno, "📍 Huerta: " + acc.huerta);
+        }
+        l.push("📦 Cajas Recibidas: " + n0(acc.cajasRec), "⚖️ Prom. por Caja: " + n2(acc.cajasRec ? acc.kgRec / acc.cajasRec : 0) + " kg",
+               "📊 Total Kgs Recibidos: " + n2(acc.kgRec) + " kg");
+        if (!concentrado) l.push("📅 Fecha: " + fechaTexto(acc.fecha));
+        l.push("", "📦 DESGLOSE DE EMPAQUE:");
+        empaque.forEach(function(f) { l.push("• " + f.nombre + ": " + n0(f.cajas) + " cajas (" + pct(f.pct) + ")"); });
+        l.push("🔷 Total Cajas: " + n0(acc.cajasEmp) + " (" + pct(acc.kgRec ? acc.kgEmp / acc.kgRec : 0) + ") - " + n2(acc.kgEmp) + " kg", "",
+               "🗑️ MERMAS Y SUBPRODUCTOS:");
+        mermas.forEach(function(f) { l.push("• " + f.nombre + ": " + n2(f.kilos) + " kg (" + n0(f.cajas) + " bultos)"); });
+        l.push("🔶 Total Desecho: " + n2(acc.kgMer) + " kg (" + n0(acc.bultosMer) + " bultos)");
+        if (concentrado) {
+            l.push("", "🆔 PROCESOS:");
+            acc.procesos.forEach(function(p) {
+                l.push("• " + p.estiba + " (" + fechaTexto(p.fecha) + "): " + n0(p.cajasRec) + " cajas, " + n2(p.kgRec) + " kg, " +
+                       pct(p.kgRec ? p.kgEmp / p.kgRec : 0) + " empaque");
+            });
+        }
+        return l.join("\n");
+    }
+
+    function nombreArchivo() {
+        return procesoActivo === "concentrado" ? "Concentrado " + duenoActivo.nombre : "Proceso " + procesoActivo.estiba;
+    }
+    function lienzoFicha() { return html2canvas(document.getElementById("ficha"), { scale: 2, backgroundColor: "#ffffff", useCORS: true }); }
+    function aviso(texto, tipo) { DevExpress.ui.notify({ message: texto, width: 360, position: { at: "top center", my: "top center", offset: "0 60" } }, tipo || "success", 2500); }
+
+    $("#btn-copiar-texto").on("click", function() {
+        navigator.clipboard.writeText(textoFicha()).then(function() { aviso("Texto copiado: pégalo en WhatsApp"); },
+                                                         function() { aviso("No se pudo copiar", "error"); });
+    });
+    $("#btn-copiar-imagen").on("click", function() {
+        if (!window.ClipboardItem) { aviso("Este navegador no copia imágenes; usa Descargar imagen", "warning"); return; }
+        lienzoFicha().then(function(c) {
+            c.toBlob(function(blob) {
+                navigator.clipboard.write([new ClipboardItem({ "image/png": blob })])
+                    .then(function() { aviso("Imagen copiada: pégala en WhatsApp"); }, function() { aviso("No se pudo copiar la imagen", "error"); });
+            });
+        });
+    });
+    $("#btn-descargar-imagen").on("click", function() {
+        lienzoFicha().then(function(c) { c.toBlob(function(blob) { saveAs(blob, nombreArchivo() + ".png"); }); });
+    });
+    $("#btn-imprimir").on("click", function() { window.print(); });
+
+    $("#lista-duenos").on("click", ".dueno", function() {
+        var nombre = $(this).attr("data-dueno");
+        duenoActivo = duenos.find(function(d) { return d.nombre === nombre; }) || null;
+        procesoActivo = duenoActivo && duenoActivo.procesos.length === 1 ? duenoActivo.procesos[0] : "concentrado";
+        pintarDuenos(); pintarProcesos(); pintarFicha();
+    });
+    $("#lista-procesos").on("click", ".proceso", function() {
+        var estiba = $(this).attr("data-estiba");
+        procesoActivo = duenoActivo.procesos.find(function(p) { return p.estiba === estiba; });
+        pintarProcesos(); pintarFicha();
+    });
+    $("#resumen-dueno").on("click", "#btn-concentrado", function() { procesoActivo = "concentrado"; pintarProcesos(); pintarFicha(); });
+
+    // ------------------------------------------------------------------ vista general
+    function pintarGeneral() {
+        var t = nuevoAcumulado();
+        procesos.forEach(function(p) { sumarAcumulado(t, p); });
+        var kpis = [
+            ["Procesos", n0(procesos.length)], ["Productores", n0(duenos.length)], ["Cajas recibidas", n0(t.cajasRec)],
+            ["Kg recibidos", n0(t.kgRec)], ["Kg empacados", n0(t.kgEmp) + ' <span class="text-sm text-slate-500">' + pct(t.kgRec ? t.kgEmp / t.kgRec : 0) + '</span>'],
+            ["Kg mermas", n0(t.kgMer) + ' <span class="text-sm text-slate-500">' + pct(t.kgRec ? t.kgMer / t.kgRec : 0) + '</span>']
+        ];
+        $("#kpis-generales").html(kpis.map(function(k) {
+            return '<div class="tarjeta kpi"><div class="etq">' + k[0] + '</div><div class="valor verde">' + k[1] + '</div></div>';
+        }).join(""));
+
+        var top = duenos.slice(0, 12).reverse().map(function(d) {
+            return { nombre: d.nombre, empaque: d.kgEmp, mermas: d.kgMer, recibido: d.kgRec };
+        });
+        $("#g-productores").dxChart({
+            dataSource: top, rotated: true, palette: ["#72a651", "#e0b43a"], animation: false,
+            commonSeriesSettings: { argumentField: "nombre", type: "stackedBar" },
+            series: [{ valueField: "empaque", name: "Kg empacados" }, { valueField: "mermas", name: "Kg mermas" }],
+            argumentAxis: { label: { font: { size: 10 }, customizeText: function() { return this.valueText.length > 28 ? this.valueText.slice(0, 27) + "…" : this.valueText; } } },
+            valueAxis: { label: { customizeText: function() { return n0(this.value); } } },
+            legend: { verticalAlignment: "bottom", horizontalAlignment: "center" },
+            tooltip: { enabled: true, shared: true, customizeTooltip: function(a) {
+                var d = top.find(function(x) { return x.nombre === a.argumentText; });
+                return { text: a.argumentText + "\nRecibido: " + n2(d.recibido) + " kg\nEmpaque: " + n2(d.empaque) + " kg (" + pct(d.empaque / d.recibido) + ")\nMermas: " + n2(d.mermas) + " kg" };
+            } },
+            onPointClick: function(e) { irAProductor(e.target.argument); }
+        });
+
+        var porVariedad = {};
+        procesos.forEach(function(p) { porVariedad[p.variedad] = (porVariedad[p.variedad] || 0) + p.kgRec; });
+        $("#g-variedades").dxPieChart({
+            type: "doughnut", palette: COLORES, innerRadius: 0.55, animation: false,
+            dataSource: Object.keys(porVariedad).map(function(v) { return { variedad: v, kilos: porVariedad[v] }; }).sort(function(a, b) { return b.kilos - a.kilos; }),
+            series: { argumentField: "variedad", valueField: "kilos", label: { visible: true, connector: { visible: true }, customizeText: function(a) { return a.argumentText + "\n" + pct(a.percent); } } },
+            legend: { visible: false },
+            tooltip: { enabled: true, customizeTooltip: function(a) { return { text: a.argumentText + ": " + n2(a.value) + " kg" }; } }
+        });
+
+        var pres = filasDesglose(t.empaque, t.cajasEmp, true).sort(function(a, b) { return b.cajas - a.cajas; });
+        $("#g-presentaciones").dxChart({
+            dataSource: pres, palette: COLORES, animation: false,
+            series: { argumentField: "nombre", valueField: "cajas", type: "bar", color: "#72a651",
+                      label: { visible: true, customizeText: function() { return n0(this.value) + " (" + pct(this.value / t.cajasEmp) + ")"; } } },
+            legend: { visible: false }, valueAxis: { label: { customizeText: function() { return n0(this.value); } } },
+            tooltip: { enabled: true, customizeTooltip: function(a) { return { text: a.argumentText + ": " + n0(a.value) + " cajas" }; } }
+        });
+
+        var presNombres = pres.map(function(f) { return f.nombre; });
+        $("#g-tamanos").dxChart({
+            dataSource: Object.keys(t.tamanos).sort(compararNatural).map(function(tm) {
+                var fila = { tamano: tm };
+                Object.keys(t.tamanos[tm]).forEach(function(p) { fila[oracion(p)] = t.tamanos[tm][p]; });
+                return fila;
+            }),
+            palette: COLORES, animation: false,
+            commonSeriesSettings: { argumentField: "tamano", type: "stackedBar" },
+            series: presNombres.map(function(p) { return { valueField: p, name: p }; }),
+            legend: { verticalAlignment: "top", horizontalAlignment: "center" },
+            valueAxis: { label: { customizeText: function() { return n0(this.value); } } },
+            tooltip: { enabled: true, customizeTooltip: function(a) { return { text: a.seriesName + " " + a.argumentText + ": " + n0(a.value) + " cajas" }; } }
+        });
+
+        // Semana = lunes de la semana de la fecha del proceso
+        var porSemana = {};
+        procesos.forEach(function(p) {
+            var f = new Date(p.fecha + "T00:00:00"); f.setDate(f.getDate() - ((f.getDay() + 6) % 7));
+            var k = f.getFullYear() + "-" + String(f.getMonth() + 1).padStart(2, "0") + "-" + String(f.getDate()).padStart(2, "0");
+            var s = porSemana[k] = porSemana[k] || { semana: k, kgRec: 0, kgEmp: 0, procesos: 0 };
+            s.kgRec += p.kgRec; s.kgEmp += p.kgEmp; s.procesos += 1;
+        });
+        $("#g-semanas").dxChart({
+            dataSource: Object.keys(porSemana).sort().map(function(k) {
+                var s = porSemana[k]; s.etiqueta = "Sem. " + fechaTexto(k).slice(0, 5); s.rendimiento = s.kgRec ? s.kgEmp / s.kgRec * 100 : 0; return s;
+            }),
+            animation: false,
+            commonSeriesSettings: { argumentField: "etiqueta" },
+            series: [{ valueField: "kgRec", name: "Kg recibidos", type: "bar", color: "#a3c585" },
+                     { valueField: "rendimiento", name: "% empaque", type: "spline", axis: "porcentaje", color: "#476b32", point: { visible: true } }],
+            valueAxis: [{ label: { customizeText: function() { return n0(this.value); } } },
+                        { name: "porcentaje", position: "right", visualRange: [0, 100], label: { customizeText: function() { return this.value + "%"; } } }],
+            legend: { verticalAlignment: "top", horizontalAlignment: "center" },
+            tooltip: { enabled: true, shared: true, customizeTooltip: function(a) {
+                var s = a.points[0].point.data;
+                return { text: s.etiqueta + " (" + s.procesos + " procesos)\nRecibido: " + n2(s.kgRec) + " kg\nEmpaque: " + fmt2.format(s.rendimiento) + "%" };
+            } }
+        });
+
+        $("#g-ranking").dxDataGrid({
+            dataSource: duenos.map(function(d) {
+                return { nombre: d.nombre, procesos: d.procesos.length, cajasRec: d.cajasRec, kgRec: d.kgRec,
+                         promCaja: d.cajasRec ? d.kgRec / d.cajasRec : 0, cajasEmp: d.cajasEmp, kgEmp: d.kgEmp,
+                         pctEmp: d.kgRec ? d.kgEmp / d.kgRec : 0, kgMer: d.kgMer, pctMer: d.kgRec ? d.kgMer / d.kgRec : 0 };
+            }),
+            showBorders: true, rowAlternationEnabled: true, columnAutoWidth: true, hoverStateEnabled: true,
+            searchPanel: { visible: true, width: 240, placeholder: "Buscar productor..." },
+            sorting: { mode: "multiple" }, paging: { pageSize: 15 },
+            export: { enabled: true },
+            onExporting: function(e) {
+                var libro = new ExcelJS.Workbook(), hoja = libro.addWorksheet("Productores");
+                DevExpress.excelExporter.exportDataGrid({ component: e.component, worksheet: hoja }).then(function() {
+                    libro.xlsx.writeBuffer().then(function(b) { saveAs(new Blob([b], { type: "application/octet-stream" }), "Ranking de productores.xlsx"); });
+                });
+                e.cancel = true;
+            },
+            onRowClick: function(e) { if (e.rowType === "data") irAProductor(e.data.nombre); },
+            columns: [
+                { dataField: "nombre", caption: "Productor" },
+                { dataField: "procesos", caption: "Procesos", dataType: "number" },
+                { dataField: "cajasRec", caption: "Cajas recibidas", dataType: "number", format: "#,##0" },
+                { dataField: "kgRec", caption: "Kg recibidos", dataType: "number", format: "#,##0.00", sortOrder: "desc" },
+                { dataField: "promCaja", caption: "Prom. kg/caja", dataType: "number", format: "#,##0.00" },
+                { dataField: "cajasEmp", caption: "Cajas empacadas", dataType: "number", format: "#,##0" },
+                { dataField: "kgEmp", caption: "Kg empacados", dataType: "number", format: "#,##0.00" },
+                { dataField: "pctEmp", caption: "% empaque", dataType: "number", format: { type: "percent", precision: 2 } },
+                { dataField: "kgMer", caption: "Kg mermas", dataType: "number", format: "#,##0.00" },
+                { dataField: "pctMer", caption: "% mermas", dataType: "number", format: { type: "percent", precision: 2 } }
+            ],
+            summary: { totalItems: [
+                { column: "nombre", summaryType: "count", displayFormat: "{0} productores" },
+                { column: "procesos", summaryType: "sum" },
+                { column: "cajasRec", summaryType: "sum", valueFormat: "#,##0", displayFormat: "{0}" },
+                { column: "kgRec", summaryType: "sum", valueFormat: "#,##0.00", displayFormat: "{0}" },
+                { column: "cajasEmp", summaryType: "sum", valueFormat: "#,##0", displayFormat: "{0}" },
+                { column: "kgEmp", summaryType: "sum", valueFormat: "#,##0.00", displayFormat: "{0}" },
+                { column: "kgMer", summaryType: "sum", valueFormat: "#,##0.00", displayFormat: "{0}" }
+            ] }
+        });
+    }
+
+    function irAProductor(nombre) {
+        mostrarVista("productor");
+        duenoActivo = duenos.find(function(d) { return d.nombre === nombre; }) || null;
+        procesoActivo = duenoActivo ? "concentrado" : null;
+        pintarDuenos(); pintarProcesos(); pintarFicha();
+        var $btn = $('#lista-duenos .dueno.activo').get(0);
+        if ($btn) $btn.scrollIntoView({ block: "center" });
+    }
+
+    var vista = "productor", generalPintado = false;
+    function mostrarVista(nueva) {
+        vista = nueva;
+        $(".pestana").removeClass("activa").filter('[data-vista="' + nueva + '"]').addClass("activa");
+        $("#vista-productor").css("display", nueva === "productor" ? "flex" : "none");
+        $("#vista-general").css("display", nueva === "general" ? "block" : "none");
+        // Las gráficas se dibujan con la vista visible (oculta no tienen tamaño)
+        if (nueva === "general" && !generalPintado) { pintarGeneral(); generalPintado = true; }
+    }
+    $(".pestana").on("click", function() { mostrarVista($(this).attr("data-vista")); });
+
+    // ------------------------------------------------------------------ periodo y carga
+    function isoDe(caja) {
+        var f = caja.option("value");
+        return f ? f.getFullYear() + "-" + String(f.getMonth() + 1).padStart(2, "0") + "-" + String(f.getDate()).padStart(2, "0") : "";
+    }
+    function deIso(iso) { return new Date(iso + "T00:00:00"); }
+    var fechaInicio = $("#fecha-inicio").dxDateBox({ type: "date", displayFormat: "dd/MM/yyyy", value: deIso(JSON.parse(document.getElementById("dato-fecha-inicio").textContent)) }).dxDateBox("instance");
+    var fechaFin = $("#fecha-fin").dxDateBox({ type: "date", displayFormat: "dd/MM/yyyy", value: deIso(JSON.parse(document.getElementById("dato-fecha-fin").textContent)) }).dxDateBox("instance");
+
+    function rangoPeriodo(clave) {
+        var hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+        var a = hoy.getFullYear(), m = hoy.getMonth();
+        if (clave === "mes") return [new Date(a, m, 1), new Date(a, m + 1, 0)];
+        if (clave === "mes_anterior") return [new Date(a, m - 1, 1), new Date(a, m, 0)];
+        if (clave === "tres_meses") return [new Date(a, m - 2, 1), new Date(a, m + 1, 0)];
+        var inicioTemporada = m >= 7 ? a : a - 1;   // la temporada empieza en agosto
+        return [new Date(inicioTemporada, 7, 1), new Date(inicioTemporada + 1, 6, 31)];
+    }
+    $("#periodo").dxSelectBox({
+        dataSource: [{ id: "mes", texto: "Mes actual" }, { id: "mes_anterior", texto: "Mes anterior" },
+                     { id: "tres_meses", texto: "Últimos 3 meses" }, { id: "temporada", texto: "Temporada" }],
+        displayExpr: "texto", valueExpr: "id", placeholder: "Periodo...",
+        onValueChanged: function(e) {
+            if (!e.value) return;
+            var r = rangoPeriodo(e.value);
+            fechaInicio.option("value", r[0]); fechaFin.option("value", r[1]);
+            cargar();
+        }
+    });
+
+    var buscador = $("#buscar-dueno").dxTextBox({ mode: "search", placeholder: "Buscar productor...", valueChangeEvent: "keyup", onValueChanged: pintarDuenos }).dxTextBox("instance");
+    var panelCarga = $("#carga").dxLoadPanel({ message: "Cargando procesos...", shading: true, shadingColor: "rgba(255,255,255,.6)" }).dxLoadPanel("instance");
+
+    function cargar() {
+        panelCarga.show();
+        $.getJSON(URL_DATOS, { fecha_inicio: isoDe(fechaInicio), fecha_fin: isoDe(fechaFin) }).done(function(r) {
+            prepararDatos(r);
+            var nombre = duenoActivo && duenoActivo.nombre, estiba = procesoActivo && procesoActivo.estiba, concentrado = procesoActivo === "concentrado";
+            duenoActivo = duenos.find(function(d) { return d.nombre === nombre; }) || null;
+            procesoActivo = !duenoActivo ? null : concentrado ? "concentrado" :
+                (duenoActivo.procesos.find(function(p) { return p.estiba === estiba; }) || "concentrado");
+            pintarDuenos(); pintarProcesos(); pintarFicha();
+            generalPintado = false;
+            if (vista === "general") { pintarGeneral(); generalPintado = true; }
+        }).fail(function() { aviso("No se pudieron cargar los datos", "error"); }).always(function() { panelCarga.hide(); });
+    }
+    $("#btn-actualizar").on("click", cargar);
+
+    $("#btn-cerrar").on("click", function() {
+        var contenedor = window.parent;
+        if (contenedor && contenedor !== window && typeof contenedor.cerrarPestanaDeVentana === "function") contenedor.cerrarPestanaDeVentana(window);
+        else window.location.href = "{% url 'reportes:lista_tablas' %}";
+    });
+
+    cargar();
+});
+</script>
+</body>
+</html>

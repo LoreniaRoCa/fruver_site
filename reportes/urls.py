@@ -1,6 +1,6 @@
 
 from django.urls import path
-from . import excel, views  # 👈 ESTA LÍNEA ES LA QUE FALTABA
+from . import excel, maquila, views  # 👈 ESTA LÍNEA ES LA QUE FALTABA
 
 app_name = 'reportes'
 
@@ -10,6 +10,9 @@ urlpatterns = [
     path('api/guardar-plantilla/', views.guardar_plantilla_pivot, name='guardar_plantilla_pivot'),
     path('api/eliminar-plantilla/', views.eliminar_plantilla_pivot, name='eliminar_plantilla_pivot'),
     path('api/predeterminar-plantilla/', views.predeterminar_plantilla_pivot, name='predeterminar_plantilla_pivot'),
+    # Tablero de maquila
+    path('maquila/', maquila.tablero_maquila_view, name='tablero_maquila'),
+    path('maquila/datos/', maquila.datos_maquila_view, name='datos_maquila'),
     # Reportes en Excel (Power Query)
     path('excel/', excel.inicio_excel_view, name='excel_inicio'),
     path('excel/claves/nueva/', excel.nueva_clave_excel_view, name='excel_nueva_clave'),

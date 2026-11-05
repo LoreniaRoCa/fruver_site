@@ -73,7 +73,7 @@ Est AS (
             fecha    = CAST(sel.d_fecha_sel AS DATE),
             lote     = RTRIM(lot.c_codigo_lot) + ' ' + lot.v_nombre_lot,
             huerta   = hue.v_nombre_hue,
-            dueno    = dno.v_nombre_dno,
+            dueno    =  case when isnull(dno.v_pagara_dno, '')='' then v_nombre_dno else dno.v_pagara_dno end,
             cultivo  = cul.v_nombre_cul,
             variedad = vari.v_nombre_var,
             kilos_recibidos = Cant.Kilos,
@@ -96,23 +96,23 @@ Det AS (
             -- Envase 03 (KILOGRAMOS / bins) = mermas y subproductos; lo demás es empaque
             tipo         = CASE WHEN Pal.c_codigo_env = '03' THEN 'Mermas y subproductos' ELSE 'Empaque' END,
             presentacion = CASE WHEN Pal.c_codigo_env = '03'                 THEN tam.v_nombre_tam
-                                WHEN cal.v_nombre_prc LIKE 'CHAROLA SELECTA%'  THEN 'Selecta charola'
-                                WHEN cal.v_nombre_prc LIKE 'CHAROLA COMERCIAL%' THEN 'Comercial charola'
-                                WHEN cal.v_nombre_prc LIKE 'BOLSA%'             THEN 'Bolsa'
-                                ELSE cal.v_nombre_prc END,
-            calidad  = cal.v_nombre_prc,
+                                WHEN isnull(cal.v_nombre_prc, tam.v_nombre_tam) LIKE 'CHAROLA SELECTA%'  THEN 'Selecta charola'
+                                WHEN isnull(cal.v_nombre_prc, tam.v_nombre_tam) LIKE 'CHAROLA COMERCIAL%' THEN 'Comercial charola'
+                                WHEN isnull(cal.v_nombre_prc, tam.v_nombre_tam) LIKE 'BOLSA%'             THEN 'Bolsa'
+                                ELSE isnull(cal.v_nombre_prc, tam.v_nombre_tam) END,
+            calidad  = isnull(cal.v_nombre_prc, tam.v_nombre_tam),
             envase   = env.v_nombre_env,
             etiqueta = RTRIM(eti.v_nombre_eti),
             tamano   = tam.v_nombre_tam,
             producto = pro.v_nombre_pro,
-            cajas    = CASE WHEN Pal.c_codigo_env = '03' THEN 0 ELSE Pal.n_bulxpa_pal END,
+            cajas    = Pal.n_bulxpa_pal,
             kilos    = pro.n_pesbul_pro * Pal.n_bulxpa_pal,  -- peso promedio del producto
             -- Lo recibido solo en el primer renglón de la estiba
             primero  = ROW_NUMBER() OVER (PARTITION BY Est.c_codigo_sel ORDER BY Pal.c_codigo_env, pro.c_codigo_pro, Pal.c_codigo_eti)
     FROM    Pal
             INNER JOIN Est ON Est.c_codigo_sel = Pal.c_codigo_sel AND Est.c_codigo_tem = Pal.c_codigo_tem
             INNER JOIN dbo.t_producto pro WITH (NOLOCK) ON pro.c_codigo_pro = Pal.c_codigo_pro
-            INNER JOIN dbo.t_producto_calidad cal WITH (NOLOCK) ON cal.c_codigo_prc = pro.c_codigo_prc
+            LEFT OUTER JOIN dbo.t_producto_calidad cal WITH (NOLOCK) ON cal.c_codigo_prc = pro.c_codigo_prc
             INNER JOIN dbo.t_tamanio tam WITH (NOLOCK) ON tam.c_codigo_tam = pro.c_codigo_tam
             INNER JOIN dbo.t_etiqueta eti WITH (NOLOCK) ON eti.c_codigo_eti = Pal.c_codigo_eti
             INNER JOIN dbo.t_envase env WITH (NOLOCK) ON env.c_codigo_env = Pal.c_codigo_env

@@ -134,14 +134,18 @@
             if (openSlug) {
                 e.preventDefault();
                 window.history.pushState({}, '', href);
-                abrirTabReporte(openSlug, titulo, '/reportes/pivot/' + openSlug + '/');
+                abrirTabReporte(openSlug, titulo, urlDePestana(openSlug));
             }
         });
     });
 
+    // Páginas que no son tabla dinámica y también se abren en pestaña (?open=<clave>)
+    var PAGINAS_ESPECIALES = { "tablero-maquila": "{% url 'reportes:tablero_maquila' %}" };
+    function urlDePestana(slug) { return PAGINAS_ESPECIALES[slug] || ('/reportes/pivot/' + slug + '/'); }
+
     // Texto del enlace del menú lateral sin el nombre del ícono ("bar_chart") ni espacios de más
     function tituloDeEnlace(enlace) {
-        return $(enlace).text().replace(/^\s*bar_chart\s*/i, '').replace(/\s+/g, ' ').trim();
+        return $(enlace).text().replace(/^\s*(bar_chart|dashboard)\s*/i, '').replace(/\s+/g, ' ').trim();
     }
 
     function procesarUrlParam() {
@@ -150,7 +154,7 @@
         if (openSlug) {
             var enlaceMenu = $('a[href*="/reportes/tablas/?open=' + openSlug + '"]').get(0);
             var nombreReporte = (enlaceMenu && tituloDeEnlace(enlaceMenu)) || openSlug.replace(/[-_]/g, ' ').toUpperCase();
-            abrirTabReporte(openSlug, nombreReporte, '/reportes/pivot/' + openSlug + '/');
+            abrirTabReporte(openSlug, nombreReporte, urlDePestana(openSlug));
         }
     }
 
@@ -166,7 +170,7 @@
             loadPanelInstance.show();
         }
 
-        var urlLimpia = ('/reportes/pivot/' + slug + '/').replace(/\/+/g, '/');
+        var urlLimpia = urlDePestana(slug).replace(/\/+/g, '/');
         var items = (tabPanelInstance.option("dataSource") || []).slice();
 
         // Si el reporte ya tiene pestañas abiertas, la nueva se numera: "Ventas (2)"
