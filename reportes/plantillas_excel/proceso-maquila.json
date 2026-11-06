@@ -1,0 +1,33 @@
+{
+  "version": "202611061404",
+  "hoja_parametros": "Parámetros",
+  "celdas": {
+    "servidor": "C4",
+    "empresa": "C5",
+    "empresas": "D5",
+    "fecha_inicio": "C6",
+    "fecha_fin": "C7"
+  },
+  "columnas": [
+    "Resumen proceso",
+    "Estiba",
+    "Fecha",
+    "Lote",
+    "Huerta",
+    "Dueño",
+    "Cultivo",
+    "Variedad",
+    "Tipo",
+    "Presentación",
+    "Calidad",
+    "Envase",
+    "Etiqueta",
+    "Tamaño",
+    "Producto",
+    "Cajas",
+    "Kilos",
+    "Kilos recibidos",
+    "Cajas recibidas"
+  ],
+  "creada": "2026-11-06T14:04:46-06:00"
+}
