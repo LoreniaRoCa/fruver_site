@@ -39,12 +39,22 @@
         .boton:hover { border-color: #72a651; color: #476b32; }
         .scroll { overflow-y: auto; }
         .vacio { color: #94a3b8; text-align: center; padding: 40px 10px; }
+        .solo-impresion { display: none; }
+        .chip { border: 1px solid #cbd5e1; border-radius: 999px; padding: 2px 10px; font-size: 11px; font-weight: 600; color: #475569; background: #fff; }
+        .chip.activo { background: #476b32; border-color: #476b32; color: #fff; }
         @media print {
             body { background: #fff; }
-            body * { visibility: hidden; }
-            #ficha, #ficha * { visibility: visible; }
-            #ficha { position: absolute; left: 0; top: 0; width: 100%; border: 0; }
             .no-imprimir { display: none !important; }
+            /* Ficha: solo la ficha */
+            body:not(.imprimiendo-general) * { visibility: hidden; }
+            body:not(.imprimiendo-general) #ficha, body:not(.imprimiendo-general) #ficha * { visibility: visible; }
+            body:not(.imprimiendo-general) #ficha { position: absolute; left: 0; top: 0; width: 100%; border: 0; }
+            /* Tablero General: encabezado, indicadores, gráficas y ranking completos */
+            body.imprimiendo-general, body.imprimiendo-general .h-full { height: auto !important; overflow: visible !important; }
+            body.imprimiendo-general #vista-productor { display: none !important; }
+            body.imprimiendo-general #vista-general { display: block !important; overflow: visible !important; padding: 0; }
+            body.imprimiendo-general .solo-impresion { display: block; }
+            body.imprimiendo-general .tarjeta { break-inside: avoid; border-color: #cbd5e1; }
         }
     </style>
 </head>
@@ -99,7 +109,14 @@
 
     <!-- Vista: general -->
     <main id="vista-general" class="flex-1 min-h-0 scroll p-3" style="display: none">
-        <div id="kpis-generales" class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-3"></div>
+        <div class="no-imprimir flex justify-end mb-2">
+            <button type="button" class="boton" id="btn-imprimir-general"><i class="dx-icon-print"></i>Imprimir tablero / PDF</button>
+        </div>
+        <div class="solo-impresion mb-3">
+            <div class="text-lg font-bold verde">📊 Tablero de maquila</div>
+            <div class="text-xs text-slate-500">{{ nombre_empresa }} · <span id="periodo-impresion"></span></div>
+        </div>
+        <div id="kpis-generales" class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3 mb-3"></div>
         <div class="grid grid-cols-1 xl:grid-cols-2 gap-3 mb-3">
             <div class="tarjeta p-3"><div class="font-semibold mb-1">Productores que más maquilaron (kg recibidos)</div><div id="g-productores" style="height: 360px"></div></div>
             <div class="tarjeta p-3"><div class="font-semibold mb-1">Kg recibidos por variedad</div><div id="g-variedades" style="height: 360px"></div></div>
@@ -150,6 +167,22 @@ $(function() {
 
     // ------------------------------------------------------------------ datos
     var procesos = [], duenos = [], duenoActivo = null, procesoActivo = null;
+    var variedadActiva = null;   // concentrado del productor solo de una variedad (null = todas)
+    // Las "cajas recibidas" de la recepción son pallets: se muestran como pallets y de ahí las cajas por pallet
+    function cajasPorPallet(acc) { return acc.cajasRec ? acc.cajasEmp / acc.cajasRec : 0; }
+    function kgPorPallet(acc) { return acc.cajasRec ? acc.kgRec / acc.cajasRec : 0; }
+    function procesosVisibles(d) {
+        return d.procesos.filter(function(p) { return !variedadActiva || p.variedad === variedadActiva; });
+    }
+    // Ficha concentrada: el productor completo o solo sus procesos de la variedad elegida
+    function concentradoActivo() {
+        if (!duenoActivo || !variedadActiva) return duenoActivo;
+        var acc = Object.assign(nuevoAcumulado(), { nombre: duenoActivo.nombre, procesos: [], variedades: {} });
+        acc.variedades[variedadActiva] = true;
+        procesosVisibles(duenoActivo).forEach(function(p) { acc.procesos.push(p); sumarAcumulado(acc, p); });
+        return acc;
+    }
+    function fichaActiva() { return procesoActivo === "concentrado" ? concentradoActivo() : procesoActivo; }
 
     function nuevoAcumulado() {
         return { kgRec: 0, cajasRec: 0, empaque: {}, mermas: {}, tamanos: {}, kgEmp: 0, cajasEmp: 0, kgMer: 0, bultosMer: 0 };
@@ -233,7 +266,7 @@ $(function() {
     }
 
     function pintarProcesos() {
-        var d = duenoActivo;
+        var d = concentradoActivo();
         if (!d) {
             $("#resumen-dueno").html('<div class="text-slate-400">Selecciona un productor.</div>');
             $("#lista-procesos").empty();
@@ -244,24 +277,36 @@ $(function() {
             '<div class="text-xs text-slate-500 mb-2">' + Object.keys(d.variedades).map(esc).join(", ") + '</div>' +
             '<div class="grid grid-cols-3 gap-2 text-center">' +
             '<div><div class="font-bold">' + d.procesos.length + '</div><div class="text-[11px] text-slate-500">Procesos</div></div>' +
-            '<div><div class="font-bold">' + n0(d.cajasRec) + '</div><div class="text-[11px] text-slate-500">Cajas recibidas</div></div>' +
+            '<div><div class="font-bold">' + n0(d.cajasRec) + '</div><div class="text-[11px] text-slate-500">Pallets recibidos</div></div>' +
             '<div><div class="font-bold">' + n0(d.kgRec) + '</div><div class="text-[11px] text-slate-500">Kg recibidos</div></div></div>' +
             barraRendimiento(d) +
             '<div class="flex justify-between text-[11px] text-slate-500 mt-1"><span>Empaque ' + pct(d.kgRec ? d.kgEmp / d.kgRec : 0) +
             '</span><span>Mermas ' + pct(d.kgRec ? d.kgMer / d.kgRec : 0) + '</span></div>' +
             '<button type="button" class="boton w-full justify-center mt-2' + (procesoActivo === "concentrado" ? ' borde-verde verde' : '') +
-            '" id="btn-concentrado"><i class="dx-icon-detailslayout"></i>Ficha concentrada del productor</button>');
+            '" id="btn-concentrado"><i class="dx-icon-detailslayout"></i>Ficha concentrada del productor</button>' +
+            chipsVariedad());
 
-        $("#lista-procesos").html(d.procesos.map(function(p) {
+        $("#lista-procesos").html(procesosVisibles(duenoActivo).map(function(p) {
             return '<button type="button" class="proceso' + (p === procesoActivo ? ' activo' : '') + '" data-estiba="' + esc(p.estiba) + '">' +
                 '<div class="flex justify-between items-baseline"><span class="font-bold">📋 ' + esc(p.estiba) + '</span>' +
                 '<span class="text-xs text-slate-500">📅 ' + fechaTexto(p.fecha) + '</span></div>' +
                 '<div class="text-xs text-slate-500 mb-1">' + esc(p.variedad) + '</div>' +
                 '<div class="grid grid-cols-3 gap-1 text-xs whitespace-nowrap">' +
-                '<div>📦 <b>' + n0(p.cajasRec) + '</b> cajas</div>' +
-                '<div>⚖️ <b>' + n2(p.cajasRec ? p.kgRec / p.cajasRec : 0) + '</b> kg/caja</div>' +
+                '<div>📦 <b>' + n0(p.cajasRec) + '</b> pallets</div>' +
+                '<div>⚖️ <b>' + n2(kgPorPallet(p)) + '</b> kg/pallet</div>' +
                 '<div>📊 <b>' + n2(p.kgRec) + '</b> kg</div></div>' + barraRendimiento(p) + '</button>';
         }).join(""));
+    }
+
+    // Variedades del productor (si tiene más de una): el concentrado y sus procesos se pueden ver por variedad
+    function chipsVariedad() {
+        var variedades = Object.keys(duenoActivo.variedades).sort();
+        if (variedades.length < 2) return "";
+        return '<div class="flex flex-wrap gap-1 mt-2"><span class="text-[11px] text-slate-500 self-center mr-1">Variedad:</span>' +
+            [""].concat(variedades).map(function(v) {
+                return '<button type="button" class="chip' + ((variedadActiva || "") === v ? ' activo' : '') + '" data-variedad="' + esc(v) + '">' +
+                       (v ? esc(v) : "Todas") + '</button>';
+            }).join("") + '</div>';
     }
 
     function filasDesglose(grupo, total, esEmpaque) {
@@ -273,7 +318,7 @@ $(function() {
 
     // Ficha de un proceso o concentrada de un productor (acc = proceso o dueño)
     function pintarFicha() {
-        var acc = procesoActivo === "concentrado" ? duenoActivo : procesoActivo;
+        var acc = fichaActiva();
         $("#acciones-ficha").css("visibility", acc ? "visible" : "hidden");
         if (!acc) { $("#ficha").html('<div class="vacio">Selecciona un productor y uno de sus procesos.</div>'); return; }
         var concentrado = procesoActivo === "concentrado";
@@ -284,13 +329,14 @@ $(function() {
         var datos = concentrado ? [
             ["🍏 Producto", "Manzana (" + producto + ")"], ["👤 Dueño", acc.nombre],
             ["🆔 Procesos", acc.procesos.length], ["📅 Periodo", fechaTexto(isoDe(fechaInicio)) + " al " + fechaTexto(isoDe(fechaFin))],
-            ["📦 Cajas recibidas", n0(acc.cajasRec)], ["⚖️ Prom. por caja", n2(acc.cajasRec ? acc.kgRec / acc.cajasRec : 0) + " kg"],
-            ["📊 Total kgs recibidos", n2(acc.kgRec) + " kg"]
+            ["📦 Pallets recibidos", n0(acc.cajasRec)], ["⚖️ Prom. por pallet", n2(kgPorPallet(acc)) + " kg"],
+            ["📊 Total kgs recibidos", n2(acc.kgRec) + " kg"], ["📦 Prom. cajas por pallet", n2(cajasPorPallet(acc))]
         ] : [
             ["🍏 Producto", "Manzana (" + producto + ")"], ["🆔 Estiba", acc.estiba], ["🆔 Lote", acc.lote],
-            ["👤 Dueño", acc.dueno], ["📍 Huerta", acc.huerta], ["📦 Cajas recibidas", n0(acc.cajasRec)],
-            ["⚖️ Prom. por caja", n2(acc.cajasRec ? acc.kgRec / acc.cajasRec : 0) + " kg"],
-            ["📊 Total kgs recibidos", n2(acc.kgRec) + " kg"], ["📅 Fecha", fechaTexto(acc.fecha)]
+            ["👤 Dueño", acc.dueno], ["📍 Huerta", acc.huerta], ["📦 Pallets recibidos", n0(acc.cajasRec)],
+            ["⚖️ Prom. por pallet", n2(kgPorPallet(acc)) + " kg"],
+            ["📊 Total kgs recibidos", n2(acc.kgRec) + " kg"], ["📦 Prom. cajas por pallet", n2(cajasPorPallet(acc))],
+            ["📅 Fecha", fechaTexto(acc.fecha)]
         ];
 
         var html = '<div class="flex justify-between items-start gap-4">' +
@@ -323,11 +369,12 @@ $(function() {
 
         if (concentrado) {
             html += '<div class="seccion">🆔 Procesos</div><table class="tabla-ficha"><tr><th>Estiba</th><th>Fecha</th><th>Variedad</th>' +
-                '<th class="num">Cajas rec.</th><th class="num">Kg recibidos</th><th class="num">Cajas emp.</th><th class="num">% empaque</th><th class="num">% mermas</th></tr>' +
+                '<th class="num">Pallets rec.</th><th class="num">Kg recibidos</th><th class="num">Cajas emp.</th><th class="num">% empaque</th><th class="num">% mermas</th><th class="num">Cajas/pallet</th></tr>' +
                 acc.procesos.map(function(p) {
                     return '<tr><td>' + esc(p.estiba) + '</td><td>' + fechaTexto(p.fecha) + '</td><td>' + esc(p.variedad) + '</td><td class="num">' +
                         n0(p.cajasRec) + '</td><td class="num">' + n2(p.kgRec) + '</td><td class="num">' + n0(p.cajasEmp) + '</td><td class="num">' +
-                        pct(p.kgRec ? p.kgEmp / p.kgRec : 0) + '</td><td class="num">' + pct(p.kgRec ? p.kgMer / p.kgRec : 0) + '</td></tr>';
+                        pct(p.kgRec ? p.kgEmp / p.kgRec : 0) + '</td><td class="num">' + pct(p.kgRec ? p.kgMer / p.kgRec : 0) +
+                        '</td><td class="num">' + n2(cajasPorPallet(p)) + '</td></tr>';
                 }).join("") + '</table>';
         }
         $("#ficha").html(html);
@@ -360,7 +407,7 @@ $(function() {
     // Texto para WhatsApp, con el mismo formato que el reporte que ya se manda
     function textoFicha() {
         var concentrado = procesoActivo === "concentrado";
-        var acc = concentrado ? duenoActivo : procesoActivo;
+        var acc = fichaActiva();
         var empaque = filasDesglose(acc.empaque, acc.cajasEmp, true);
         var mermas = filasDesglose(acc.mermas, acc.kgMer, false);
         var l = [concentrado ? "📋 CONCENTRADO DE MAQUILA 📋" : "📋 RESUMEN DE PROCESO DE MAQUILA 📋", ""];
@@ -371,8 +418,8 @@ $(function() {
             l.push("🍏 Producto: Manzana (" + acc.variedad + ")", "🆔 Estiba: " + acc.estiba, "🆔 Lote: " + acc.lote,
                    "👤 Dueño: " + acc.dueno, "📍 Huerta: " + acc.huerta);
         }
-        l.push("📦 Cajas Recibidas: " + n0(acc.cajasRec), "⚖️ Prom. por Caja: " + n2(acc.cajasRec ? acc.kgRec / acc.cajasRec : 0) + " kg",
-               "📊 Total Kgs Recibidos: " + n2(acc.kgRec) + " kg");
+        l.push("📦 Pallets Recibidos: " + n0(acc.cajasRec), "⚖️ Prom. por Pallet: " + n2(kgPorPallet(acc)) + " kg",
+               "📊 Total Kgs Recibidos: " + n2(acc.kgRec) + " kg", "📦 Prom. Cajas por Pallet: " + n2(cajasPorPallet(acc)));
         if (!concentrado) l.push("📅 Fecha: " + fechaTexto(acc.fecha));
         l.push("", "📦 DESGLOSE DE EMPAQUE:");
         empaque.forEach(function(f) { l.push("• " + f.nombre + ": " + n0(f.cajas) + " cajas (" + pct(f.pct) + ")"); });
@@ -383,15 +430,16 @@ $(function() {
         if (concentrado) {
             l.push("", "🆔 PROCESOS:");
             acc.procesos.forEach(function(p) {
-                l.push("• " + p.estiba + " (" + fechaTexto(p.fecha) + "): " + n0(p.cajasRec) + " cajas, " + n2(p.kgRec) + " kg, " +
-                       pct(p.kgRec ? p.kgEmp / p.kgRec : 0) + " empaque");
+                l.push("• " + p.estiba + " (" + fechaTexto(p.fecha) + "): " + n0(p.cajasRec) + " pallets, " + n2(p.kgRec) + " kg, " +
+                       pct(p.kgRec ? p.kgEmp / p.kgRec : 0) + " empaque, " + n2(cajasPorPallet(p)) + " cajas/pallet");
             });
         }
         return l.join("\n");
     }
 
     function nombreArchivo() {
-        return procesoActivo === "concentrado" ? "Concentrado " + duenoActivo.nombre : "Proceso " + procesoActivo.estiba;
+        return procesoActivo === "concentrado" ? "Concentrado " + duenoActivo.nombre + (variedadActiva ? " " + variedadActiva : "")
+                                               : "Proceso " + procesoActivo.estiba;
     }
     function lienzoFicha() { return html2canvas(document.getElementById("ficha"), { scale: 2, backgroundColor: "#ffffff", useCORS: true }); }
     function aviso(texto, tipo) { DevExpress.ui.notify({ message: texto, width: 360, position: { at: "top center", my: "top center", offset: "0 60" } }, tipo || "success", 2500); }
@@ -417,6 +465,7 @@ $(function() {
     $("#lista-duenos").on("click", ".dueno", function() {
         var nombre = $(this).attr("data-dueno");
         duenoActivo = duenos.find(function(d) { return d.nombre === nombre; }) || null;
+        variedadActiva = null;
         procesoActivo = duenoActivo && duenoActivo.procesos.length === 1 ? duenoActivo.procesos[0] : "concentrado";
         pintarDuenos(); pintarProcesos(); pintarFicha();
     });
@@ -426,13 +475,19 @@ $(function() {
         pintarProcesos(); pintarFicha();
     });
     $("#resumen-dueno").on("click", "#btn-concentrado", function() { procesoActivo = "concentrado"; pintarProcesos(); pintarFicha(); });
+    $("#resumen-dueno").on("click", ".chip", function() {
+        variedadActiva = $(this).attr("data-variedad") || null;
+        procesoActivo = "concentrado";
+        pintarProcesos(); pintarFicha();
+    });
 
     // ------------------------------------------------------------------ vista general
     function pintarGeneral() {
         var t = nuevoAcumulado();
         procesos.forEach(function(p) { sumarAcumulado(t, p); });
         var kpis = [
-            ["Procesos", n0(procesos.length)], ["Productores", n0(duenos.length)], ["Cajas recibidas", n0(t.cajasRec)],
+            ["Procesos", n0(procesos.length)], ["Productores", n0(duenos.length)], ["Pallets recibidos", n0(t.cajasRec)],
+            ["Cajas por pallet", n2(cajasPorPallet(t))],
             ["Kg recibidos", n0(t.kgRec)], ["Kg empacados", n0(t.kgEmp) + ' <span class="text-sm text-slate-500">' + pct(t.kgRec ? t.kgEmp / t.kgRec : 0) + '</span>'],
             ["Kg mermas", n0(t.kgMer) + ' <span class="text-sm text-slate-500">' + pct(t.kgRec ? t.kgMer / t.kgRec : 0) + '</span>']
         ];
@@ -519,7 +574,7 @@ $(function() {
         $("#g-ranking").dxDataGrid({
             dataSource: duenos.map(function(d) {
                 return { nombre: d.nombre, procesos: d.procesos.length, cajasRec: d.cajasRec, kgRec: d.kgRec,
-                         promCaja: d.cajasRec ? d.kgRec / d.cajasRec : 0, cajasEmp: d.cajasEmp, kgEmp: d.kgEmp,
+                         promCaja: kgPorPallet(d), cajasPallet: cajasPorPallet(d), cajasEmp: d.cajasEmp, kgEmp: d.kgEmp,
                          pctEmp: d.kgRec ? d.kgEmp / d.kgRec : 0, kgMer: d.kgMer, pctMer: d.kgRec ? d.kgMer / d.kgRec : 0 };
             }),
             showBorders: true, rowAlternationEnabled: true, columnAutoWidth: true, hoverStateEnabled: true,
@@ -537,14 +592,15 @@ $(function() {
             columns: [
                 { dataField: "nombre", caption: "Productor" },
                 { dataField: "procesos", caption: "Procesos", dataType: "number" },
-                { dataField: "cajasRec", caption: "Cajas recibidas", dataType: "number", format: "#,##0" },
+                { dataField: "cajasRec", caption: "Pallets recibidos", dataType: "number", format: "#,##0" },
                 { dataField: "kgRec", caption: "Kg recibidos", dataType: "number", format: "#,##0.00", sortOrder: "desc" },
-                { dataField: "promCaja", caption: "Prom. kg/caja", dataType: "number", format: "#,##0.00" },
+                { dataField: "promCaja", caption: "Prom. kg/pallet", dataType: "number", format: "#,##0.00" },
                 { dataField: "cajasEmp", caption: "Cajas empacadas", dataType: "number", format: "#,##0" },
                 { dataField: "kgEmp", caption: "Kg empacados", dataType: "number", format: "#,##0.00" },
                 { dataField: "pctEmp", caption: "% empaque", dataType: "number", format: { type: "percent", precision: 2 } },
                 { dataField: "kgMer", caption: "Kg mermas", dataType: "number", format: "#,##0.00" },
-                { dataField: "pctMer", caption: "% mermas", dataType: "number", format: { type: "percent", precision: 2 } }
+                { dataField: "pctMer", caption: "% mermas", dataType: "number", format: { type: "percent", precision: 2 } },
+                { dataField: "cajasPallet", caption: "Cajas por pallet", dataType: "number", format: "#,##0.00" }
             ],
             summary: { totalItems: [
                 { column: "nombre", summaryType: "count", displayFormat: "{0} productores" },
@@ -561,6 +617,7 @@ $(function() {
     function irAProductor(nombre) {
         mostrarVista("productor");
         duenoActivo = duenos.find(function(d) { return d.nombre === nombre; }) || null;
+        variedadActiva = null;
         procesoActivo = duenoActivo ? "concentrado" : null;
         pintarDuenos(); pintarProcesos(); pintarFicha();
         var $btn = $('#lista-duenos .dueno.activo').get(0);
@@ -577,6 +634,30 @@ $(function() {
         if (nueva === "general" && !generalPintado) { pintarGeneral(); generalPintado = true; }
     }
     $(".pestana").on("click", function() { mostrarVista($(this).attr("data-vista")); });
+
+    // Imprimir el tablero General como un álbum: hoja horizontal, todas las gráficas y el ranking sin páginas
+    $("#btn-imprimir-general").on("click", function() {
+        var ranking = $("#g-ranking").dxDataGrid("instance");
+        $("#periodo-impresion").text("Periodo: " + fechaTexto(isoDe(fechaInicio)) + " al " + fechaTexto(isoDe(fechaFin)));
+        var $pagina = $('<style id="pagina-impresion">@page { size: letter landscape; margin: 10mm; }</style>').appendTo("head");
+        $("body").addClass("imprimiendo-general");
+        ranking.option({ "paging.enabled": false, "searchPanel.visible": false, "export.enabled": false });
+        // Las gráficas se vuelven a dibujar al ancho de la hoja antes de imprimir
+        $("#vista-general .dx-chart, #vista-general .dx-pie-chart").each(function() {
+            var grafica = DevExpress.viz.dxChart.getInstance(this) || DevExpress.viz.dxPieChart.getInstance(this);
+            if (grafica) grafica.render();
+        });
+        setTimeout(function() {
+            window.print();
+            $("body").removeClass("imprimiendo-general");
+            $pagina.remove();
+            ranking.option({ "paging.enabled": true, "searchPanel.visible": true, "export.enabled": true });
+            $("#vista-general .dx-chart, #vista-general .dx-pie-chart").each(function() {
+                var grafica = DevExpress.viz.dxChart.getInstance(this) || DevExpress.viz.dxPieChart.getInstance(this);
+                if (grafica) grafica.render();
+            });
+        }, 400);
+    });
 
     // ------------------------------------------------------------------ periodo y carga
     function isoDe(caja) {
@@ -617,6 +698,7 @@ $(function() {
             prepararDatos(r);
             var nombre = duenoActivo && duenoActivo.nombre, estiba = procesoActivo && procesoActivo.estiba, concentrado = procesoActivo === "concentrado";
             duenoActivo = duenos.find(function(d) { return d.nombre === nombre; }) || null;
+            if (!duenoActivo || !duenoActivo.variedades[variedadActiva]) variedadActiva = null;
             procesoActivo = !duenoActivo ? null : concentrado ? "concentrado" :
                 (duenoActivo.procesos.find(function(p) { return p.estiba === estiba; }) || "concentrado");
             pintarDuenos(); pintarProcesos(); pintarFicha();

@@ -13,7 +13,7 @@
     @temporada            una temporada; sin fechas ni temporada, la activa (t_temporada.c_activo_tem = '1')
 
   Columnas:
-    - resumen: "estiba | promedio por caja | cajas | kilos recibidos"
+    - resumen: "estiba | kg por pallet | pallets | kilos recibidos" (lo recibido en t_recepciondet son pallets)
     - tipo: 'Empaque' o 'Mermas y subproductos' (envase 03 = KILOGRAMOS / bins)
     - cajas: cajas de empaque; en mermas, bultos
     - kilos: peso promedio del producto (n_pesbul_pro) por cajas
@@ -74,8 +74,8 @@ BEGIN
                 kilos_recibidos = Cant.Kilos,
                 cajas_recibidas = Cant.Cajas,
                 resumen  = sel.c_codigo_sel
-                           + ' | ' + FORMAT(Cant.Kilos / NULLIF(Cant.Cajas, 0), 'N2', 'en-US') + ' kg/caja'
-                           + ' | ' + FORMAT(Cant.Cajas, 'N0', 'en-US') + ' cajas'
+                           + ' | ' + FORMAT(Cant.Kilos / NULLIF(Cant.Cajas, 0), 'N2', 'en-US') + ' kg/pallet'
+                           + ' | ' + FORMAT(Cant.Cajas, 'N0', 'en-US') + ' pallets'
                            + ' | ' + FORMAT(Cant.Kilos, 'N2', 'en-US') + ' kg'
         FROM    dbo.t_seleccion sel WITH (NOLOCK)
                 INNER JOIN Cant ON Cant.c_codigo_sel = sel.c_codigo_sel AND Cant.c_codigo_tem = sel.c_codigo_tem
