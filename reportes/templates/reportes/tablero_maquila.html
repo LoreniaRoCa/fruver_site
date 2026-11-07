@@ -227,13 +227,14 @@ $(function() {
             var p = porEstiba[r.Estiba];
             if (!p) {
                 p = porEstiba[r.Estiba] = Object.assign(nuevoAcumulado(), {
-                    estiba: r.Estiba, fecha: r.Fecha, lote: r.Lote, huerta: r.Huerta, dueno: r["Dueño"] || "Sin dueño",
+                    estiba: r.Estiba, fecha: r.Fecha, lote: r.Lote, huerta: r.Huerta, dueno: String(r["Dueño"] || "").trim() || "Sin dueño",
                     variedad: sinNumero(r.Variedad), cultivo: r.Cultivo });
             }
             sumarRenglon(p, r);
         });
         procesos = Object.keys(porEstiba).map(function(k) { return porEstiba[k]; })
-            .sort(function(a, b) { return a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : 0; });
+            // Procesos por número de estiba, de menor a mayor (y por temporada si el periodo abarca dos)
+            .sort(function(a, b) { return (a.temporada || '').localeCompare(b.temporada || '') || Number(a.estiba) - Number(b.estiba); });
 
         var porDueno = {};
         procesos.forEach(function(p) {
@@ -241,7 +242,8 @@ $(function() {
             d.procesos.push(p); d.variedades[p.variedad] = true;
             sumarAcumulado(d, p);
         });
-        duenos = Object.keys(porDueno).map(function(k) { return porDueno[k]; }).sort(function(a, b) { return b.kgRec - a.kgRec; });
+        // Productores en orden alfabético (la gráfica de los que más maquilaron y el ranking ordenan por kilos)
+        duenos = Object.keys(porDueno).map(function(k) { return porDueno[k]; }).sort(function(a, b) { return a.nombre.localeCompare(b.nombre, 'es'); });
     }
 
     // ------------------------------------------------------------------ vista por productor
@@ -495,7 +497,7 @@ $(function() {
             return '<div class="tarjeta kpi"><div class="etq">' + k[0] + '</div><div class="valor verde">' + k[1] + '</div></div>';
         }).join(""));
 
-        var top = duenos.slice(0, 12).reverse().map(function(d) {
+        var top = duenos.slice().sort(function(a, b) { return b.kgRec - a.kgRec; }).slice(0, 12).reverse().map(function(d) {
             return { nombre: d.nombre, empaque: d.kgEmp, mermas: d.kgMer, recibido: d.kgRec };
         });
         $("#g-productores").dxChart({
