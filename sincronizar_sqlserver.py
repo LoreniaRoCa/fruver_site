@@ -2,7 +2,7 @@
 Sube información de SQL Server a Supabase (Postgres) y deja registro en rep_bitacora_sincronizacion.
 
 No depende de Django: corre en cualquier equipo con Python 3.10+ y el driver ODBC "SQL Server".
-    python sincronizar_sqlserver.py 1      (1 = Inventario, 2 = Detalle de Ventas, 3 = Proceso de maquila)
+    python sincronizar_sqlserver.py 1      (1 = Inventario, 2 = Detalle de Ventas, 3 = Proceso de maquila, 4 = Cajas por empleado)
 
 Lee del .env (misma carpeta): SQL_SERVER, SQL_DATABASE, SQL_USER, SQL_PASSWORD y
 DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT (la conexión a Supabase del portal).
@@ -48,6 +48,14 @@ def consulta_maquila():
     return "SET NOCOUNT ON; EXEC dbo.sp_frupa_proceso_maquila"
 
 
+def consulta_cajas_empleado():
+    """
+    Cajas por empleado de la temporada activa: cajas etiquetadas por empacador por día, con charola y bolsa.
+    La consulta vive en dbo.sp_frupa_cajas_empleado (sql/sp_frupa_cajas_empleado.sql), que también usa Fruverpack.
+    """
+    return "SET NOCOUNT ON; EXEC dbo.sp_frupa_cajas_empleado"
+
+
 # proceso -> (nombre, función que arma la consulta, tabla destino, qué se borra antes de insertar):
 #   None          = toda la tabla
 #   "columna"     = las fechas del año en curso en esa columna
@@ -56,6 +64,7 @@ PROCESOS = {
     1: ("Inventario", consulta_inventario, "rep_eye_inventario", None),
     2: ("Detalle de Ventas", consulta_ventas, "rep_detalleventas", "FechaFac"),
     3: ("Proceso de maquila", consulta_maquila, "rep_proceso_maquila", ("temporada",)),
+    4: ("Cajas por empleado", consulta_cajas_empleado, "rep_cajas_empleado", ("temporada",)),
 }
 
 
