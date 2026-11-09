@@ -1,0 +1,24 @@
+{
+  "version": "202611091528",
+  "hoja_parametros": "Parámetros",
+  "celdas": {
+    "servidor": "C4",
+    "empresa": "C5",
+    "empresas": "D5",
+    "fecha_inicio": "C6",
+    "fecha_fin": "C7"
+  },
+  "columnas": [
+    "Día",
+    "Día de la semana",
+    "Código de empleado",
+    "Empacador",
+    "Punto de empaque",
+    "Banda",
+    "Cultivo",
+    "Cajas",
+    "Charola",
+    "Bolsa"
+  ],
+  "creada": "2026-11-09T15:29:12-06:00"
+}
