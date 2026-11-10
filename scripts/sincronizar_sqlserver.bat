@@ -1,6 +1,6 @@
 @echo off
 rem Sube la informacion de SQL Server a Supabase (sincronizar_sqlserver.py, sin Django).
-rem Uso:  scripts\sincronizar_sqlserver.bat 1   (1 = Inventario, 2 = Detalle de Ventas, 3 = Proceso de maquila, 4 = Cajas por empleado)
+rem Uso:  scripts\sincronizar_sqlserver.bat 1   (1 = Inventario, 2 = Detalle de Ventas, 3 = Proceso de maquila, 4 = Cajas por empleado, 5 = Pallets)
 rem Lo ejecuta el Programador de tareas de Windows cada hora.
 
 setlocal

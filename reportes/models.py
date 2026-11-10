@@ -42,6 +42,7 @@ class Pivot_Dinamico(models.Model):
             ("ver_ventas_pivot", "Puede ver el reporte: Ventas Pivot"),
             ("ver_proceso_maquila_pivot", "Puede ver el reporte: Proceso de maquila"),
             ("ver_cajas_empleado_pivot", "Puede ver el reporte: Cajas por empleado"),
+            ("ver_pallets_pivot", "Puede ver el reporte: Pallets"),
             # Puedes ir agregando aquí permisos para otros reportes que crees a futuro
         ]
 

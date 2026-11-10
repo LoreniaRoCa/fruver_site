@@ -1,0 +1,26 @@
+{
+  "version": "202611101402",
+  "hoja_parametros": "Parámetros",
+  "celdas": {
+    "servidor": "C4",
+    "empresa": "C5",
+    "empresas": "D5",
+    "fecha_inicio": "C6",
+    "fecha_fin": "C7"
+  },
+  "columnas": [
+    "Pallet",
+    "Sección",
+    "Fecha de empaque",
+    "Hora",
+    "Lote",
+    "Nombre del lote",
+    "Manifiesto",
+    "Estiba",
+    "Selección",
+    "Etiqueta",
+    "Producto",
+    "Cajas"
+  ],
+  "creada": "2026-11-10T14:03:17-06:00"
+}

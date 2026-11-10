@@ -2,7 +2,7 @@
 Sube información de SQL Server a Supabase (Postgres) y deja registro en rep_bitacora_sincronizacion.
 
 No depende de Django: corre en cualquier equipo con Python 3.10+ y el driver ODBC "SQL Server".
-    python sincronizar_sqlserver.py 1      (1 = Inventario, 2 = Detalle de Ventas, 3 = Proceso de maquila, 4 = Cajas por empleado)
+    python sincronizar_sqlserver.py 1      (1 = Inventario, 2 = Detalle de Ventas, 3 = Proceso de maquila, 4 = Cajas por empleado, 5 = Pallets)
 
 Lee del .env (misma carpeta): SQL_SERVER, SQL_DATABASE, SQL_USER, SQL_PASSWORD y
 DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT (la conexión a Supabase del portal).
@@ -56,6 +56,11 @@ def consulta_cajas_empleado():
     return "SET NOCOUNT ON; EXEC dbo.sp_frupa_cajas_empleado"
 
 
+def consulta_pallets():
+    """Pallets empacados de la temporada activa (t_palet), un renglón por pallet y sección. Vive en dbo.sp_frupa_pallets."""
+    return "SET NOCOUNT ON; EXEC dbo.sp_frupa_pallets"
+
+
 # proceso -> (nombre, función que arma la consulta, tabla destino, qué se borra antes de insertar):
 #   None          = toda la tabla
 #   "columna"     = las fechas del año en curso en esa columna
@@ -65,6 +70,7 @@ PROCESOS = {
     2: ("Detalle de Ventas", consulta_ventas, "rep_detalleventas", "FechaFac"),
     3: ("Proceso de maquila", consulta_maquila, "rep_proceso_maquila", ("temporada",)),
     4: ("Cajas por empleado", consulta_cajas_empleado, "rep_cajas_empleado", ("temporada",)),
+    5: ("Pallets", consulta_pallets, "rep_pallets", ("temporada",)),
 }
 
 
