@@ -27,6 +27,7 @@ ALLOWED_HOSTS = ['*']
 CSRF_TRUSTED_ORIGINS = [
     'https://rh.fruver.com.mx',
     'http://rh.fruver.com.mx',
+    'https://site.fruver.com.mx',
 ]
 
 # Indicar a Django que considere segura la conexión del proxy de DreamHost
