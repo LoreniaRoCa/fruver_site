@@ -43,6 +43,8 @@
         .chip { border: 1px solid #cbd5e1; border-radius: 999px; padding: 2px 10px; font-size: 11px; font-weight: 600; color: #475569; background: #fff; }
         .chip.activo { background: #476b32; border-color: #476b32; color: #fff; }
         @media print {
+            /* Que el navegador imprima los colores y fondos (sin tener que activar "Gráficos de fondo") */
+            * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             body { background: #fff; }
             .no-imprimir { display: none !important; }
             /* Ficha: solo la ficha */
