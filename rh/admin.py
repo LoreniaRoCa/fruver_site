@@ -4,7 +4,7 @@ from django.contrib.auth.admin import GroupAdmin as BaseGroupAdmin
 from django.core.mail import send_mail
 from django.db import models  
 from django.contrib import admin
-from django.urls import path
+from django.urls import path, reverse
 from django.shortcuts import render, redirect
 from django.contrib import messages
 from django import forms
@@ -1162,9 +1162,10 @@ class PuestoEmpresaFilter(admin.RelatedFieldListFilter):
             qs = field.remote_field.model.objects.filter(**limit_choices_to).order_by('descripcion')
             return [(getattr(obj, pk_field), str(obj)) for obj in qs]
         return super().field_choices(field, request, model_admin)
-def matriz_competencias_html(queryset, guardados_ids):
+def matriz_competencias_html(queryset, guardados_ids, url_agregar=''):
     """Competencias específicas del empleado: selector por clasificación, buscador y resumen de las seleccionadas.
-    Todas las casillas se quedan en el formulario (solo se ocultan), así save_model sigue recibiendo competencias_check."""
+    Todas las casillas se quedan en el formulario (solo se ocultan), así save_model sigue recibiendo competencias_check.
+    Al final de cada clasificación se puede dar de alta una competencia nueva (url_agregar, por AJAX)."""
     from django.utils.html import escape
     grupos = {}
     for comp in queryset:
@@ -1174,6 +1175,7 @@ def matriz_competencias_html(queryset, guardados_ids):
     opciones, bloques = [], []
     inicial = None
     for i, (nombre, comps) in enumerate(grupos.items()):
+        id_clasif = comps[0].id_clasificacion_id or ''
         marcadas = sum(1 for c in comps if c.id_competencia in guardados_ids)
         if inicial is None and marcadas:
             inicial = i
@@ -1184,8 +1186,13 @@ def matriz_competencias_html(queryset, guardados_ids):
             f'{" checked" if c.id_competencia in guardados_ids else ""}>'
             f'<span>{escape(c.descripcion)}</span></label>'
             for c in comps)
+        nueva = ''
+        if url_agregar and id_clasif:
+            nueva = (f'<div class="cmp-nueva" data-clasif="{id_clasif}">'
+                     f'<input type="text" maxlength="1000" placeholder="Nueva competencia para {escape(nombre.capitalize())}…">'
+                     f'<button type="button">+ Agregar</button><small></small></div>')
         bloques.append(f'<div class="cmp-grupo" data-grupo="{i}" data-nombre="{escape(nombre)}">'
-                       f'<h3 class="cmp-grupo-titulo">📂 {escape(nombre)}</h3>{casillas}</div>')
+                       f'<h3 class="cmp-grupo-titulo">📂 {escape(nombre)}</h3>{casillas}{nueva}</div>')
     inicial = 0 if inicial is None else inicial
 
     return f'''
@@ -1223,6 +1230,15 @@ def matriz_competencias_html(queryset, guardados_ids):
   .cmp-item:hover {{ border-color:var(--cmp-acento); }}
   .cmp-item input {{ accent-color:#3b82f6; min-width:16px; height:16px; }}
   .cmp-item.cmp-resalta {{ outline:2px solid var(--cmp-acento); }}
+  .cmp-nueva {{ display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; border:1px dashed var(--cmp-acento); border-radius:.375rem;
+               padding:.5rem .75rem; margin:.25rem 0 .4rem; }}
+  .cmp-nueva input {{ flex:1; min-width:14rem; font-size:.875rem; color:var(--cmp-texto); background:var(--cmp-tarjeta);
+               border:1px solid var(--cmp-borde); border-radius:.375rem; padding:.45rem .6rem; }}
+  .cmp-nueva button {{ font-size:.85rem; font-weight:600; color:#fff; background:var(--cmp-acento); border:0; border-radius:.375rem;
+               padding:.5rem .9rem; cursor:pointer; }}
+  .cmp-nueva button:disabled {{ opacity:.6; cursor:wait; }}
+  .cmp-nueva small {{ flex-basis:100%; font-size:.8rem; color:#dc2626; }}
+  .cmp-nueva small:empty {{ display:none; }}
   .cmp-oculto {{ display:none !important; }}
   @media (max-width:640px) {{ .cmp-barra select {{ min-width:0; width:100%; }} }}
 </style>
@@ -1250,7 +1266,8 @@ def matriz_competencias_html(queryset, guardados_ids):
   var caja = document.getElementById('cmp-box'), combo = document.getElementById('cmp-clasif'),
       buscar = document.getElementById('cmp-buscar'), chips = document.getElementById('cmp-chips'),
       sin = document.getElementById('cmp-sin');
-  var grupos = caja.querySelectorAll('.cmp-grupo'), casillas = caja.querySelectorAll('input[name="competencias_check"]');
+  var grupos = caja.querySelectorAll('.cmp-grupo'), urlAgregar = '{url_agregar}';
+  function casillas() {{ return caja.querySelectorAll('input[name="competencias_check"]'); }}
   combo.value = '{inicial}';
 
   function filtrar() {{
@@ -1264,7 +1281,9 @@ def matriz_competencias_html(queryset, guardados_ids):
         else ver = vista === 'todas' || vista === g.dataset.grupo;
         it.classList.toggle('cmp-oculto', !ver); if (ver) hay++;
       }});
-      g.classList.toggle('cmp-oculto', !hay); visibles += hay;
+      var nueva = g.querySelector('.cmp-nueva'), conAlta = !texto && (vista === 'todas' || vista === g.dataset.grupo);
+      if (nueva) nueva.classList.toggle('cmp-oculto', !conAlta);
+      g.classList.toggle('cmp-oculto', !hay && !conAlta); visibles += hay;
     }});
     sin.classList.toggle('cmp-oculto', visibles > 0);
   }}
@@ -1272,7 +1291,7 @@ def matriz_competencias_html(queryset, guardados_ids):
   function resumen() {{
     var total = 0, porGrupo = {{}};
     chips.innerHTML = '';
-    casillas.forEach(function (cb) {{
+    casillas().forEach(function (cb) {{
       if (!cb.checked) return;
       total++; porGrupo[cb.dataset.grupo] = (porGrupo[cb.dataset.grupo] || 0) + 1;
       var g = caja.querySelector('.cmp-grupo[data-grupo="' + cb.dataset.grupo + '"]');
@@ -1300,7 +1319,44 @@ def matriz_competencias_html(queryset, guardados_ids):
 
   function cambio() {{ resumen(); if (combo.value === 'sel' && !buscar.value) filtrar(); }}
 
-  casillas.forEach(function (cb) {{ cb.addEventListener('change', resumen); }});
+  caja.addEventListener('change', function (e) {{ if (e.target.name === 'competencias_check') resumen(); }});
+
+  // Alta de una competencia nueva en la clasificación: se guarda en el catálogo y queda palomeada para el empleado
+  function agregar(nueva) {{
+    var txt = nueva.querySelector('input'), btn = nueva.querySelector('button'), msg = nueva.querySelector('small');
+    var descripcion = txt.value.trim();
+    msg.textContent = '';
+    if (!descripcion) {{ msg.textContent = 'Escriba la descripción de la competencia.'; txt.focus(); return; }}
+    var token = document.querySelector('input[name="csrfmiddlewaretoken"]');
+    var datos = new FormData(); datos.append('clasificacion', nueva.dataset.clasif); datos.append('descripcion', descripcion);
+    btn.disabled = true;
+    fetch(urlAgregar, {{ method: 'POST', body: datos, credentials: 'same-origin',
+                        headers: {{ 'X-CSRFToken': token ? token.value : '' }} }})
+      .then(function (r) {{ return r.json().then(function (j) {{ return {{ ok: r.ok, j: j }}; }}); }})
+      .then(function (res) {{
+        if (!res.ok) throw new Error(res.j.error || 'No se pudo agregar.');
+        var g = nueva.closest('.cmp-grupo');
+        var cb = caja.querySelector('input[name="competencias_check"][value="' + res.j.id + '"]');
+        if (!cb) {{
+          var it = document.createElement('label'); it.className = 'cmp-item'; it.dataset.texto = res.j.descripcion.toLowerCase();
+          cb = document.createElement('input'); cb.type = 'checkbox'; cb.name = 'competencias_check';
+          cb.value = res.j.id; cb.dataset.grupo = g.dataset.grupo;
+          var sp = document.createElement('span'); sp.textContent = res.j.descripcion;
+          it.appendChild(cb); it.appendChild(sp); g.insertBefore(it, nueva);
+        }}
+        cb.checked = true; txt.value = '';
+        resumen(); filtrar(); irA(cb);
+        if (res.j.existia) msg.textContent = 'Esa competencia ya existía en la clasificación; quedó seleccionada.';
+      }})
+      .catch(function (e) {{ msg.textContent = e.message; }})
+      .finally(function () {{ btn.disabled = false; }});
+  }}
+  caja.querySelectorAll('.cmp-nueva').forEach(function (nueva) {{
+    nueva.querySelector('button').onclick = function () {{ agregar(nueva); }};
+    nueva.querySelector('input').addEventListener('keydown', function (e) {{
+      if (e.key === 'Enter') {{ e.preventDefault(); agregar(nueva); }}   // que Enter no envíe el formulario del empleado
+    }});
+  }});
   combo.addEventListener('change', function () {{ buscar.value = ''; filtrar(); }});
   buscar.addEventListener('input', filtrar);
   document.getElementById('cmp-ver-sel').onclick = function () {{ buscar.value = ''; combo.value = 'sel'; filtrar(); }};
@@ -1364,7 +1420,8 @@ class EmpleadoAdmin(CatalogosOrdenadosAdmin, EmpresaFilterAdmin):
             ).values_list('id_competencia_id', flat=True))
 
             if queryset.exists():
-                matriz_html = matriz_competencias_html(queryset, guardados_ids)
+                url_agregar = reverse(f'{self.admin_site.name}:rh_empleado_agregar_competencia', args=[obj.pk])
+                matriz_html = matriz_competencias_html(queryset, guardados_ids, url_agregar)
             else:
                 matriz_html = '<div class="mt-6 bg-gray-50 dark:bg-zinc-900/40 p-4 rounded-lg border border-gray-200 dark:border-zinc-800"><p class="text-sm italic text-gray-400">No hay competencias específicas configuradas para el puesto de este empleado.</p></div>'
 
@@ -1381,6 +1438,45 @@ class EmpleadoAdmin(CatalogosOrdenadosAdmin, EmpresaFilterAdmin):
         )
         
         return super().change_view(request, object_id, form_url, extra_context=extra_context)
+
+    def get_urls(self):
+        propias = [
+            path('<path:object_id>/agregar-competencia/',
+                 self.admin_site.admin_view(self.agregar_competencia_view),
+                 name='rh_empleado_agregar_competencia'),
+        ]
+        return propias + super().get_urls()
+
+    def agregar_competencia_view(self, request, object_id):
+        """Da de alta (por AJAX) una competencia en el catálogo dentro de una clasificación del empleado.
+        La asignación al empleado se guarda al darle Guardar, como las demás casillas."""
+        if request.method != 'POST':
+            return JsonResponse({'error': 'Método no permitido.'}, status=405)
+        empleado = self.get_object(request, object_id)
+        if empleado is None or not self.has_change_permission(request, empleado):
+            return JsonResponse({'error': 'No tiene permiso para modificar este empleado.'}, status=403)
+
+        descripcion = ' '.join((request.POST.get('descripcion') or '').split())
+        clasif_id = request.POST.get('clasificacion') or ''
+        if not descripcion:
+            return JsonResponse({'error': 'Escriba la descripción de la competencia.'}, status=400)
+        if not clasif_id.isdigit():
+            return JsonResponse({'error': 'Clasificación no válida.'}, status=400)
+        clasif_id = int(clasif_id)
+
+        # Solo clasificaciones que ya se le muestran al empleado: las de su puesto o las de sus competencias guardadas
+        permitidas = set(ClasificacionPorPuesto.objects.filter(
+            id_puesto_id=empleado.id_puesto_id).values_list('id_clasificacion_id', flat=True))
+        permitidas |= set(Competencia.objects.filter(
+            empleadocompetenciaasignada__id_empleado_id=empleado.pk).values_list('id_clasificacion_id', flat=True))
+        if clasif_id not in permitidas:
+            return JsonResponse({'error': 'La clasificación no corresponde a este empleado.'}, status=400)
+
+        existente = Competencia.objects.filter(id_clasificacion_id=clasif_id, descripcion__iexact=descripcion).first()
+        if existente:
+            return JsonResponse({'id': existente.pk, 'descripcion': existente.descripcion, 'existia': True})
+        nueva = Competencia.objects.create(id_clasificacion_id=clasif_id, descripcion=descripcion)
+        return JsonResponse({'id': nueva.pk, 'descripcion': nueva.descripcion, 'existia': False})
 
     def save_model(self, request, obj, form, change):
 
