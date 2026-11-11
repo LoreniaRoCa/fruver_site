@@ -1162,6 +1162,154 @@ class PuestoEmpresaFilter(admin.RelatedFieldListFilter):
             qs = field.remote_field.model.objects.filter(**limit_choices_to).order_by('descripcion')
             return [(getattr(obj, pk_field), str(obj)) for obj in qs]
         return super().field_choices(field, request, model_admin)
+def matriz_competencias_html(queryset, guardados_ids):
+    """Competencias específicas del empleado: selector por clasificación, buscador y resumen de las seleccionadas.
+    Todas las casillas se quedan en el formulario (solo se ocultan), así save_model sigue recibiendo competencias_check."""
+    from django.utils.html import escape
+    grupos = {}
+    for comp in queryset:
+        nombre = comp.id_clasificacion.descripcion if comp.id_clasificacion else "Competencias Específicas Sueltas"
+        grupos.setdefault(nombre, []).append(comp)
+
+    opciones, bloques = [], []
+    inicial = None
+    for i, (nombre, comps) in enumerate(grupos.items()):
+        marcadas = sum(1 for c in comps if c.id_competencia in guardados_ids)
+        if inicial is None and marcadas:
+            inicial = i
+        opciones.append(f'<option value="{i}" data-nombre="{escape(nombre)}">{escape(nombre)} ({marcadas}/{len(comps)})</option>')
+        casillas = ''.join(
+            f'<label class="cmp-item" data-texto="{escape(c.descripcion.lower())}">'
+            f'<input type="checkbox" name="competencias_check" value="{c.id_competencia}" data-grupo="{i}"'
+            f'{" checked" if c.id_competencia in guardados_ids else ""}>'
+            f'<span>{escape(c.descripcion)}</span></label>'
+            for c in comps)
+        bloques.append(f'<div class="cmp-grupo" data-grupo="{i}" data-nombre="{escape(nombre)}">'
+                       f'<h3 class="cmp-grupo-titulo">📂 {escape(nombre)}</h3>{casillas}</div>')
+    inicial = 0 if inicial is None else inicial
+
+    return f'''
+<style>
+  .cmp-box {{ --cmp-fondo:#f9fafb; --cmp-tarjeta:#fff; --cmp-borde:#e5e7eb; --cmp-texto:#374151; --cmp-tenue:#6b7280;
+             --cmp-acento:#2563eb; --cmp-chip:#eff6ff; --cmp-chip-borde:#bfdbfe;
+             width:100%; margin-top:2rem; clear:both; background:var(--cmp-fondo); border:1px solid var(--cmp-borde);
+             border-radius:.5rem; padding:1.5rem; color:var(--cmp-texto); }}
+  html.dark .cmp-box {{ --cmp-fondo:rgba(24,24,27,.4); --cmp-tarjeta:rgba(39,39,42,.4); --cmp-borde:#3f3f46; --cmp-texto:#d4d4d8;
+             --cmp-tenue:#a1a1aa; --cmp-acento:#60a5fa; --cmp-chip:rgba(37,99,235,.15); --cmp-chip-borde:rgba(96,165,250,.4); }}
+  .cmp-box h2 {{ font-size:1rem; font-weight:600; margin:0 0 .25rem; }}
+  .cmp-box .cmp-ayuda {{ font-size:.875rem; color:var(--cmp-tenue); margin:0 0 1.25rem; }}
+  .cmp-sel {{ background:var(--cmp-tarjeta); border:1px solid var(--cmp-borde); border-radius:.5rem; padding:.75rem 1rem; margin-bottom:1rem; }}
+  .cmp-sel-titulo {{ display:flex; justify-content:space-between; align-items:center; font-size:.8rem; font-weight:600;
+                     text-transform:uppercase; letter-spacing:.04em; color:var(--cmp-acento); margin-bottom:.5rem; }}
+  .cmp-sel-titulo button {{ font-size:.75rem; text-transform:none; letter-spacing:0; color:var(--cmp-tenue); background:none; border:0; cursor:pointer; text-decoration:underline; }}
+  .cmp-chips {{ display:flex; flex-wrap:wrap; gap:.4rem; max-height:9.5rem; overflow:auto; }}
+  .cmp-chip {{ display:inline-flex; align-items:center; gap:.35rem; max-width:100%; font-size:.8rem; line-height:1.2;
+               background:var(--cmp-chip); border:1px solid var(--cmp-chip-borde); border-radius:999px; padding:.25rem .3rem .25rem .7rem; }}
+  .cmp-chip span {{ cursor:pointer; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:42rem; }}
+  .cmp-chip button {{ border:0; background:none; cursor:pointer; color:var(--cmp-tenue); font-size:1rem; line-height:1; padding:0 .25rem; }}
+  .cmp-chip button:hover {{ color:#dc2626; }}
+  .cmp-vacio {{ font-size:.85rem; font-style:italic; color:var(--cmp-tenue); }}
+  .cmp-barra {{ display:flex; flex-wrap:wrap; gap:.75rem; align-items:center; margin-bottom:.75rem; }}
+  .cmp-barra label {{ font-size:.85rem; font-weight:600; }}
+  .cmp-barra select, .cmp-barra input {{ font-size:.875rem; color:var(--cmp-texto); background:var(--cmp-tarjeta); border:1px solid var(--cmp-borde);
+               border-radius:.375rem; padding:.45rem .6rem; }}
+  .cmp-barra select {{ min-width:22rem; max-width:100%; }}
+  .cmp-barra input {{ flex:1; min-width:14rem; }}
+  .cmp-lista {{ max-height:28rem; overflow:auto; padding-right:.25rem; }}
+  .cmp-grupo-titulo {{ font-size:.75rem; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--cmp-acento);
+               border-bottom:1px solid var(--cmp-borde); padding-bottom:.4rem; margin:.75rem 0 .5rem; }}
+  .cmp-item {{ display:flex; align-items:center; gap:1rem; background:var(--cmp-tarjeta); border:1px solid var(--cmp-borde);
+               border-radius:.375rem; padding:.6rem 1rem; margin-bottom:.4rem; cursor:pointer; font-size:.875rem; }}
+  .cmp-item:hover {{ border-color:var(--cmp-acento); }}
+  .cmp-item input {{ accent-color:#3b82f6; min-width:16px; height:16px; }}
+  .cmp-item.cmp-resalta {{ outline:2px solid var(--cmp-acento); }}
+  .cmp-oculto {{ display:none !important; }}
+  @media (max-width:640px) {{ .cmp-barra select {{ min-width:0; width:100%; }} }}
+</style>
+<div class="cmp-box" id="cmp-box">
+  <h2>Asignación de Competencias Específicas</h2>
+  <p class="cmp-ayuda">Elija una clasificación y palomee las competencias específicas del puesto o libres que formarán parte de la evaluación individual de este colaborador.</p>
+  <div class="cmp-sel">
+    <div class="cmp-sel-titulo"><span>Seleccionadas (<b id="cmp-total">0</b>)</span>
+      <button type="button" id="cmp-ver-sel">Ver solo seleccionadas</button></div>
+    <div class="cmp-chips" id="cmp-chips"></div>
+  </div>
+  <div class="cmp-barra">
+    <label for="cmp-clasif">Clasificación</label>
+    <select id="cmp-clasif">
+      <option value="sel">— Solo seleccionadas —</option>
+      <option value="todas">— Todas las clasificaciones —</option>
+      {''.join(opciones)}
+    </select>
+    <input type="search" id="cmp-buscar" placeholder="Buscar competencia en todas las clasificaciones…">
+  </div>
+  <div class="cmp-lista" id="cmp-lista">{''.join(bloques)}<p class="cmp-vacio cmp-oculto" id="cmp-sin">No hay competencias que mostrar.</p></div>
+</div>
+<script>
+(function () {{
+  var caja = document.getElementById('cmp-box'), combo = document.getElementById('cmp-clasif'),
+      buscar = document.getElementById('cmp-buscar'), chips = document.getElementById('cmp-chips'),
+      sin = document.getElementById('cmp-sin');
+  var grupos = caja.querySelectorAll('.cmp-grupo'), casillas = caja.querySelectorAll('input[name="competencias_check"]');
+  combo.value = '{inicial}';
+
+  function filtrar() {{
+    var vista = combo.value, texto = buscar.value.trim().toLowerCase(), visibles = 0;
+    grupos.forEach(function (g) {{
+      var hay = 0;
+      g.querySelectorAll('.cmp-item').forEach(function (it) {{
+        var cb = it.querySelector('input'), ver;
+        if (texto) ver = it.dataset.texto.indexOf(texto) >= 0;
+        else if (vista === 'sel') ver = cb.checked;
+        else ver = vista === 'todas' || vista === g.dataset.grupo;
+        it.classList.toggle('cmp-oculto', !ver); if (ver) hay++;
+      }});
+      g.classList.toggle('cmp-oculto', !hay); visibles += hay;
+    }});
+    sin.classList.toggle('cmp-oculto', visibles > 0);
+  }}
+
+  function resumen() {{
+    var total = 0, porGrupo = {{}};
+    chips.innerHTML = '';
+    casillas.forEach(function (cb) {{
+      if (!cb.checked) return;
+      total++; porGrupo[cb.dataset.grupo] = (porGrupo[cb.dataset.grupo] || 0) + 1;
+      var g = caja.querySelector('.cmp-grupo[data-grupo="' + cb.dataset.grupo + '"]');
+      var chip = document.createElement('span'); chip.className = 'cmp-chip';
+      var t = document.createElement('span'); t.textContent = cb.nextElementSibling.textContent;
+      t.title = g.dataset.nombre + ' — clic para verla en su clasificación';
+      t.onclick = function () {{ irA(cb); }};
+      var x = document.createElement('button'); x.type = 'button'; x.textContent = '×'; x.title = 'Quitar';
+      x.onclick = function () {{ cb.checked = false; cambio(); }};
+      chip.appendChild(t); chip.appendChild(x); chips.appendChild(chip);
+    }});
+    if (!total) chips.innerHTML = '<span class="cmp-vacio">Este empleado aún no tiene competencias específicas seleccionadas.</span>';
+    document.getElementById('cmp-total').textContent = total;
+    combo.querySelectorAll('option[data-nombre]').forEach(function (o) {{
+      var n = caja.querySelectorAll('.cmp-grupo[data-grupo="' + o.value + '"] .cmp-item').length;
+      o.textContent = o.dataset.nombre + ' (' + (porGrupo[o.value] || 0) + '/' + n + ')';
+    }});
+  }}
+
+  function irA(cb) {{
+    buscar.value = ''; combo.value = cb.dataset.grupo; filtrar();
+    var it = cb.closest('.cmp-item'); it.scrollIntoView({{ block: 'nearest', behavior: 'smooth' }});
+    it.classList.add('cmp-resalta'); setTimeout(function () {{ it.classList.remove('cmp-resalta'); }}, 1500);
+  }}
+
+  function cambio() {{ resumen(); if (combo.value === 'sel' && !buscar.value) filtrar(); }}
+
+  casillas.forEach(function (cb) {{ cb.addEventListener('change', resumen); }});
+  combo.addEventListener('change', function () {{ buscar.value = ''; filtrar(); }});
+  buscar.addEventListener('input', filtrar);
+  document.getElementById('cmp-ver-sel').onclick = function () {{ buscar.value = ''; combo.value = 'sel'; filtrar(); }};
+  resumen(); filtrar();
+}})();
+</script>
+'''
+
+
 class EmpleadoAdmin(CatalogosOrdenadosAdmin, EmpresaFilterAdmin):
     form = EmpleadoAdminForm  
     model_class = Empleado
@@ -1216,51 +1364,7 @@ class EmpleadoAdmin(CatalogosOrdenadosAdmin, EmpresaFilterAdmin):
             ).values_list('id_competencia_id', flat=True))
 
             if queryset.exists():
-                matriz_html = '''
-                <style>
-                    .matriz-unfold-container {
-                        width: 100% !important;
-                        margin-top: 2rem !important;
-                        clear: both !important;
-                    }
-                </style>
-                '''
-                
-                matriz_html += '<div class="matriz-unfold-container bg-gray-50 dark:bg-zinc-900/40 p-6 rounded-lg border border-gray-200 dark:border-zinc-800">'
-                matriz_html += '<h2 class="text-base font-semibold text-gray-900 dark:text-white mb-1">Asignación de Competencias Específicas</h2>'
-                matriz_html += '<p class="text-sm text-gray-500 dark:text-zinc-400 mb-6">Palomee las competencias específicas del puesto o libres que formarán parte de la evaluación individual de este colaborador.</p>'
-                
-                ultima_clasificacion = None
-
-                # 3. Iteramos exactamente sobre el listado del UNION
-                for comp in queryset:
-                    clasif_nombre = comp.id_clasificacion.descripcion if comp.id_clasificacion else "Competencias Específicas Sueltas"
-                    
-                    if clasif_nombre != ultima_clasificacion:
-                        if ultima_clasificacion is not None:
-                            matriz_html += '</div></div>' 
-                        
-                        matriz_html += f'''
-                        <div class="mb-6">
-                            <h3 class="text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400 mb-3 border-b border-gray-200 dark:border-zinc-800 pb-2 flex items-center gap-2">
-                                <span>📂</span> {clasif_nombre}
-                            </h3>
-                            <div class="grid grid-cols-1 gap-2">
-                        '''
-                        ultima_clasificacion = clasif_nombre
-
-                    # 4. Evaluamos si el ID numérico de la competencia iterada está guardado
-                    is_checked = comp.id_competencia in guardados_ids
-                    checked_str = "checked" if is_checked else ""
-
-                    matriz_html += f'''
-                        <label class="flex items-center gap-4 bg-white dark:bg-zinc-800/40 hover:bg-gray-100 dark:hover:bg-zinc-800 px-4 py-3 rounded-md border border-gray-200 dark:border-zinc-800/80 cursor-pointer transition-all w-full block">
-                            <input type="checkbox" name="competencias_check" value="{comp.id_competencia}" {checked_str} class="rounded border-gray-300 dark:border-zinc-700 text-blue-600 focus:ring-blue-500 h-4 w-4" style="accent-color: #3b82f6; min-width: 16px;">
-                            <span class="text-gray-700 dark:text-zinc-300 text-sm font-normal leading-normal">{comp.descripcion}</span>
-                        </label>
-                    '''
-
-                matriz_html += '</div></div></div>'
+                matriz_html = matriz_competencias_html(queryset, guardados_ids)
             else:
                 matriz_html = '<div class="mt-6 bg-gray-50 dark:bg-zinc-900/40 p-4 rounded-lg border border-gray-200 dark:border-zinc-800"><p class="text-sm italic text-gray-400">No hay competencias específicas configuradas para el puesto de este empleado.</p></div>'
 
