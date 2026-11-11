@@ -77,7 +77,8 @@ class Command(BaseCommand):
                     if puesto_obj:
                         _, creado_pue_clas = ClasificacionPorPuesto.objects.get_or_create(
                             id_puesto=puesto_obj,
-                            id_clasificacion=clasificacion_obj
+                            id_clasificacion=clasificacion_obj,
+                            defaults={'empresa_id': puesto_obj.empresa_id}
                         )
                         if creado_pue_clas:
                             puestos_vinculados += 1
@@ -89,7 +90,8 @@ class Command(BaseCommand):
                     if empleado_obj:
                         _, creado_emp_comp = EmpleadoCompetenciaAsignada.objects.get_or_create(
                             id_empleado=empleado_obj,
-                            id_competencia=competencia_obj
+                            id_competencia=competencia_obj,
+                            defaults={'empresa_id': empleado_obj.empresa_id}
                         )
                         if creado_emp_comp:
                             empleados_vinculados += 1

@@ -591,6 +591,19 @@ class EmpresaFilterAdmin(ExcelImportAdmin):
             obj.empresa_id = request.session.get('empresa_activa') or request.session.get('empresa_id')
         super().save_model(request, obj, form, change)
 
+    def save_formset(self, request, form, formset, change):
+        # Los renglones de los inlines (p. ej. Clasificación por puesto) también llevan empresa obligatoria en la BD:
+        # se toma la del registro principal y, si no tiene, la empresa activa de la sesión.
+        instancias = formset.save(commit=False)
+        empresa_id = getattr(form.instance, 'empresa_id', None) or             request.session.get('empresa_activa') or request.session.get('empresa_id')
+        for inst in instancias:
+            if hasattr(inst, 'empresa_id') and not inst.empresa_id:
+                inst.empresa_id = empresa_id
+            inst.save()
+        for borrado in formset.deleted_objects:
+            borrado.delete()
+        formset.save_m2m()
+
 # ==========================================
 #   INLINE: CLASIFICACIÓN POR PUESTO
 # ==========================================
@@ -1493,7 +1506,8 @@ class EmpleadoAdmin(CatalogosOrdenadosAdmin, EmpresaFilterAdmin):
 
         # 2. Guardar nuevos checks marcados
         for comp_id in competencias_post_ids:
-            EmpleadoCompetenciaAsignada.objects.get_or_create(id_empleado=obj, id_competencia_id=comp_id)
+            EmpleadoCompetenciaAsignada.objects.get_or_create(id_empleado=obj, id_competencia_id=comp_id,
+                                                              defaults={'empresa_id': obj.empresa_id})
 
 #admin.site.register(Empleado, EmpleadoAdmin)
 admin_site.register(Empleado, EmpleadoAdmin)
