@@ -187,7 +187,22 @@ $(function() {
     function fichaActiva() { return procesoActivo === "concentrado" ? concentradoActivo() : procesoActivo; }
 
     function nuevoAcumulado() {
-        return { kgRec: 0, cajasRec: 0, empaque: {}, mermas: {}, tamanos: {}, kgEmp: 0, cajasEmp: 0, kgMer: 0, bultosMer: 0 };
+        return { kgRec: 0, cajasRec: 0, empaque: {}, detalle: {}, mermas: {}, tamanos: {}, kgEmp: 0, cajasEmp: 0, kgMer: 0, bultosMer: 0 };
+    }
+    // Renglón del desglose de empaque en la ficha: la bolsa por peso y las charolas por rango de tamaño
+    // (solo la tabla; la gráfica, el texto de WhatsApp y el General siguen por presentación)
+    function renglonDetalle(presentacion, calidad, tamano) {
+        var p = String(presentacion || ""), base = p.toLowerCase();
+        if (base === "bolsa") {
+            var c = String(calidad || "");
+            if (/600/.test(c)) return { nombre: "Bolsa 600 grs", grupo: p, orden: 1 };
+            if (/1[.,]?360/.test(c)) return { nombre: "Bolsa 1.360 kg", grupo: p, orden: 0 };
+        } else if (base === "selecta charola" || base === "comercial charola") {
+            var n = parseInt(String(tamano || ""), 10);
+            if (!isNaN(n)) return n < 150 ? { nombre: oracion(p) + " 56 a 138", grupo: p, orden: 0 }
+                                          : { nombre: oracion(p) + " 150 a 216", grupo: p, orden: 1 };
+        }
+        return { nombre: oracion(p), grupo: p, orden: 0 };
     }
     function sumarRenglon(acc, r) {
         acc.kgRec += r.KilosRecibidos || 0;
@@ -200,6 +215,9 @@ $(function() {
         grupo[nombre].kilos += r.Kilos || 0;
         if (esEmpaque) {
             acc.kgEmp += r.Kilos || 0; acc.cajasEmp += r.Cajas || 0;
+            var d = renglonDetalle(nombre, r.Calidad, r["Tamaño"]);
+            var fd = acc.detalle[d.nombre] = acc.detalle[d.nombre] || { cajas: 0, kilos: 0, grupo: d.grupo, orden: d.orden };
+            fd.cajas += r.Cajas || 0; fd.kilos += r.Kilos || 0;
             var tam = r["Tamaño"] || "—";
             acc.tamanos[tam] = acc.tamanos[tam] || {};
             acc.tamanos[tam][nombre] = (acc.tamanos[tam][nombre] || 0) + (r.Cajas || 0);
@@ -209,9 +227,9 @@ $(function() {
     }
     function sumarAcumulado(destino, origen) {
         ["kgRec", "cajasRec", "kgEmp", "cajasEmp", "kgMer", "bultosMer"].forEach(function(k) { destino[k] += origen[k]; });
-        ["empaque", "mermas"].forEach(function(g) {
+        ["empaque", "detalle", "mermas"].forEach(function(g) {
             Object.keys(origen[g]).forEach(function(p) {
-                destino[g][p] = destino[g][p] || { cajas: 0, kilos: 0 };
+                destino[g][p] = destino[g][p] || { cajas: 0, kilos: 0, grupo: origen[g][p].grupo, orden: origen[g][p].orden };
                 destino[g][p].cajas += origen[g][p].cajas; destino[g][p].kilos += origen[g][p].kilos;
             });
         });
@@ -320,6 +338,15 @@ $(function() {
         });
     }
 
+    // Desglose de empaque de la ficha: presentaciones de más a menos kilos y, dentro de cada una, sus renglones
+    function filasDetalle(acc) {
+        var porGrupo = {};
+        Object.keys(acc.detalle).forEach(function(k) { var f = acc.detalle[k]; porGrupo[f.grupo] = (porGrupo[f.grupo] || 0) + f.kilos; });
+        return Object.keys(acc.detalle).map(function(k) { return Object.assign({ nombre: k }, acc.detalle[k]); })
+            .sort(function(a, b) { return porGrupo[b.grupo] - porGrupo[a.grupo] || a.grupo.localeCompare(b.grupo) || a.orden - b.orden; })
+            .map(function(f) { return { nombre: f.nombre, cajas: f.cajas, kilos: f.kilos, pct: acc.cajasEmp ? f.cajas / acc.cajasEmp : 0 }; });
+    }
+
     // Ficha de un proceso o concentrada de un productor (acc = proceso o dueño)
     function pintarFicha() {
         var acc = fichaActiva();
@@ -353,7 +380,7 @@ $(function() {
 
             '<div class="seccion">📦 Desglose de empaque</div>' +
             '<table class="tabla-ficha"><tr><th>Presentación</th><th class="num">Cajas</th><th class="num">% cajas</th><th class="num">Kilos</th><th class="num">% del recibido</th></tr>' +
-            empaque.map(function(f) {
+            filasDetalle(acc).map(function(f) {
                 return '<tr><td>' + esc(f.nombre) + '</td><td class="num">' + n0(f.cajas) + '</td><td class="num">' + pct(f.pct) +
                        '</td><td class="num">' + n2(f.kilos) + '</td><td class="num">' + pct(acc.kgRec ? f.kilos / acc.kgRec : 0) + '</td></tr>';
             }).join("") +
