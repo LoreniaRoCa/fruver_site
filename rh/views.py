@@ -378,11 +378,9 @@ def Exam_clean_text(text):
 @login_required
 @permission_required('rh.ver_consolidado_resultados', raise_exception=True)
 def resumen_evaluaciones_view(request):
-    try:
-        usuario_logueado = Empleado.objects.get(user=request.user)
-    except Empleado.DoesNotExist:
-        messages.error(request, "Tu usuario no está vinculado a un registro de Empleado.")
-        return redirect('admin:index')
+    # El consolidado no depende de quién lo consulta: quien tiene el permiso (o un administrador sin
+    # registro de empleado) lo ve igual. Antes se le regresaba a la pantalla de módulos.
+    usuario_logueado = Empleado.objects.filter(user=request.user).first()
 
     empresa_activa = request.session.get('empresa_activa') or request.session.get('empresa_id')
 
