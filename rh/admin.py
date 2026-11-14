@@ -875,7 +875,23 @@ class EmpleadoAdminForm(forms.ModelForm):
 #   REGISTRO DE CATÁLOGOS EN EL ADMINISTRADOR
 # =========================================================================
 
-class PuestoAdmin(EmpresaFilterAdmin):
+class CamposDeNominaMixin:
+    """Empleado, Puesto y Departamento se alimentan del sistema de nómina (sincronizar_sqlserver.py, proceso 6).
+    En las empresas que se sincronizan (NOM_EMPRESAS del .env) esos campos se muestran solo de lectura al editar,
+    para que nadie los cambie a mano y la siguiente sincronización los sobrescriba."""
+    campos_nomina = ()
+
+    def get_readonly_fields(self, request, obj=None):
+        campos = tuple(super().get_readonly_fields(request, obj))
+        if obj is not None and obj.empresa_id:
+            from sincronizar_sqlserver import empresas_nomina
+            if obj.empresa_id in empresas_nomina():
+                campos += tuple(c for c in self.campos_nomina if c not in campos)
+        return campos
+
+
+class PuestoAdmin(CamposDeNominaMixin, EmpresaFilterAdmin):
+    campos_nomina = ('id_puesto', 'descripcion')
     model_class = Puesto
     pk_field_name = 'id_puesto'
     excel_columns = ['id_puesto', 'descripcion']
@@ -886,7 +902,8 @@ class PuestoAdmin(EmpresaFilterAdmin):
 #admin.site.register(Puesto, PuestoAdmin)
 admin_site.register(Puesto, PuestoAdmin)
 
-class DepartamentoAdmin(EmpresaFilterAdmin):
+class DepartamentoAdmin(CamposDeNominaMixin, EmpresaFilterAdmin):
+    campos_nomina = ('id_departamento', 'descripcion')
     model_class = Departamento
     pk_field_name = 'id_departamento'
     exclude = ('empresa',)  # 👈 Asegura que se excluya de la vista
@@ -1379,7 +1396,8 @@ def matriz_competencias_html(queryset, guardados_ids, url_agregar=''):
 '''
 
 
-class EmpleadoAdmin(CatalogosOrdenadosAdmin, EmpresaFilterAdmin):
+class EmpleadoAdmin(CamposDeNominaMixin, CatalogosOrdenadosAdmin, EmpresaFilterAdmin):
+    campos_nomina = ('id_empleado', 'nombre_largo', 'id_departamento', 'id_puesto', 'estado_empleado', 'fechaalta', 'CorreoElectronico')
     form = EmpleadoAdminForm  
     model_class = Empleado
     pk_field_name = 'id_empleado'
