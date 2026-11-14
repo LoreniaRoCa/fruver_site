@@ -38,173 +38,293 @@
     <p style="font-size: 14px; margin: 0;" class="text-gray-500 dark:text-zinc-400">Selecciona una opción del menú de la izquierda.</p>
 </div>
 {% else %}
-<div class="p-4 space-y-8 max-w-7xl mx-auto md:p-6 lg:p-8 text-slate-800 dark:text-neutral-200">
-    <!--
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-gray-200 dark:border-zinc-800 pb-4 gap-4">
+<style>
+    /* Tablero de evaluaciones: estilos propios (no dependen de las clases que traiga compiladas Unfold) */
+    .rhd { --verde:#72a651; --verde-osc:#5b893f; --verde-cla:#b9d7a3; --verde-fondo:#f1f7ec; --indigo:#4f46e5; --indigo-cla:#c7c4f7;
+           --indigo-fondo:#eef0fe; --rojo:#dc2626; --ambar:#d97706; --ambar-fondo:#fef3c7; --gris:#cbd5e1;
+           --tarjeta:#ffffff; --borde:#e5e7eb; --texto:#111827; --texto2:#4b5563; --tenue:#9ca3af; --pista:#eef2f6;
+           max-width: 80rem; margin: 0 auto; padding: 1rem; color: var(--texto); }
+    html.dark .rhd { --tarjeta:#18181b; --borde:#27272a; --texto:#f4f4f5; --texto2:#d4d4d8; --tenue:#71717a; --pista:#27272a;
+           --verde-fondo:rgba(114,166,81,.14); --indigo-fondo:rgba(79,70,229,.18); --ambar-fondo:rgba(217,119,6,.18); --gris:#3f3f46; }
+    @media (min-width: 768px) { .rhd { padding: 1.5rem 2rem 2rem; } }
+    .rhd * { box-sizing: border-box; }
+    .rhd-tarjeta { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 16px; box-shadow: 0 1px 2px rgba(15,23,42,.04), 0 4px 16px rgba(15,23,42,.04); }
+    .rhd-etiqueta { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--tenue); }
+    .rhd-num { font-variant-numeric: tabular-nums; }
+
+    /* Encabezado */
+    .rhd-hero { position: relative; overflow: hidden; padding: 22px 24px; display: flex; flex-wrap: wrap; gap: 18px; align-items: center; justify-content: space-between;
+                background: linear-gradient(120deg, var(--verde-fondo), var(--tarjeta) 55%); }
+    .rhd-hero::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 5px; background: linear-gradient(var(--verde), var(--verde-osc)); }
+    .rhd-hero h1 { font-size: 22px; font-weight: 800; margin: 4px 0 6px; letter-spacing: -.01em; color: var(--texto); }
+    .rhd-periodo { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; font-size: 13px; color: var(--texto2); }
+    .rhd-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; border-radius: 999px; padding: 3px 10px; }
+    .rhd-chip.ok { background: var(--verde-fondo); color: var(--verde-osc); }
+    .rhd-chip.alerta { background: var(--ambar-fondo); color: var(--ambar); }
+    .rhd-chip.vencida { background: rgba(220,38,38,.12); color: var(--rojo); }
+    .rhd-chip.neutro { background: var(--pista); color: var(--texto2); }
+    html.dark .rhd-chip.ok { color: #9fd17f; }
+    .rhd-tiempo { margin-top: 12px; max-width: 420px; }
+    .rhd-tiempo .pista { height: 6px; }
+    .rhd-tiempo small { display: flex; justify-content: space-between; font-size: 11px; color: var(--tenue); margin-top: 4px; }
+    .rhd-botones { display: flex; flex-wrap: wrap; gap: 8px; }
+    .rhd-boton { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; border-radius: 10px; padding: 9px 14px; text-decoration: none;
+                 border: 1px solid var(--borde); background: var(--tarjeta); color: var(--texto); transition: border-color .15s, background .15s; }
+    .rhd-boton:hover { border-color: var(--verde); }
+    .rhd-boton.primario { background: var(--verde); border-color: var(--verde); color: #fff; }
+    .rhd-boton.primario:hover { background: var(--verde-osc); }
+    .rhd-boton .material-symbols-outlined { font-size: 18px; }
+
+    /* Indicadores */
+    .rhd-kpis { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-top: 18px; }
+    .rhd-kpi { padding: 18px 18px 16px; display: flex; gap: 14px; align-items: center; justify-content: space-between; position: relative; }
+    .rhd-kpi .icono { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; margin-bottom: 10px; }
+    .rhd-kpi .icono .material-symbols-outlined { font-size: 20px; }
+    .rhd-kpi .valor { font-size: 32px; font-weight: 800; line-height: 1; letter-spacing: -.02em; }
+    .rhd-kpi .valor small { font-size: 15px; font-weight: 600; color: var(--tenue); margin-left: 2px; }
+    .rhd-kpi .pie { font-size: 12px; color: var(--texto2); margin-top: 6px; }
+    .rhd-kpi .pie b { color: var(--texto); }
+    .rhd-anillo { position: relative; width: 74px; height: 74px; flex-shrink: 0; }
+    .rhd-anillo svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+    .rhd-anillo span { position: absolute; inset: 0; display: grid; place-items: center; font-size: 14px; font-weight: 800; }
+    .t-verde { background: var(--verde-fondo); color: var(--verde-osc); } html.dark .t-verde { color: #9fd17f; }
+    .t-indigo { background: var(--indigo-fondo); color: var(--indigo); } html.dark .t-indigo { color: #a5a1ff; }
+    .t-gris { background: var(--pista); color: var(--texto2); }
+
+    /* Barras */
+    .pista { background: var(--pista); border-radius: 999px; overflow: hidden; position: relative; }
+    .relleno { height: 100%; border-radius: 999px; width: 0; transition: width .8s cubic-bezier(.22,1,.36,1); }
+    .r-verde { background: linear-gradient(90deg, var(--verde-osc), var(--verde)); }
+    .r-indigo { background: linear-gradient(90deg, #4338ca, var(--indigo)); }
+    .r-tiempo { background: linear-gradient(90deg, var(--verde-cla), var(--verde)); }
+
+    /* Estado de colaboradores */
+    .rhd-estado { padding: 20px 24px; margin-top: 18px; }
+    .rhd-estado .cab { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: baseline; margin-bottom: 12px; }
+    .rhd-estado .cab b { font-size: 15px; }
+    .rhd-apilada { display: flex; height: 14px; border-radius: 999px; overflow: hidden; background: var(--pista); }
+    .rhd-apilada div { height: 100%; transition: width .8s cubic-bezier(.22,1,.36,1); width: 0; }
+    .rhd-apilada div + div { border-left: 2px solid var(--tarjeta); }
+    .e-completas { background: var(--verde-osc); } .e-auto { background: var(--verde-cla); } .e-jefe { background: var(--indigo-cla); } .e-pendiente { background: var(--gris); }
+    .rhd-leyenda { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); margin-top: 14px; }
+    .rhd-leyenda div { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--texto2); }
+    .rhd-leyenda i { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+    .rhd-leyenda b { font-size: 16px; color: var(--texto); margin-right: 2px; }
+
+    /* Paneles inferiores */
+    .rhd-paneles { display: grid; gap: 18px; margin-top: 18px; grid-template-columns: 1fr; }
+    @media (min-width: 1480px) { .rhd-paneles { grid-template-columns: 5fr 7fr; } }
+    .rhd-panel { padding: 20px 22px; min-width: 0; }
+    .rhd-panel .cab { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; }
+    .rhd-panel h2 { font-size: 15px; font-weight: 700; margin: 0; color: var(--texto); }
+    .rhd-claves { display: flex; gap: 12px; font-size: 11px; color: var(--tenue); }
+    .rhd-claves span { display: inline-flex; align-items: center; gap: 5px; }
+    .rhd-claves i { width: 8px; height: 8px; border-radius: 2px; }
+
+    .rhd-depto { padding: 10px 0; border-top: 1px solid var(--borde); }
+    .rhd-depto:first-of-type { border-top: 0; padding-top: 0; }
+    .rhd-depto .fila { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 7px; }
+    .rhd-depto .nombre { font-size: 13px; font-weight: 700; color: var(--texto); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .rhd-depto .nombre small { font-weight: 500; color: var(--tenue); margin-left: 6px; }
+    .rhd-depto .total { font-size: 13px; font-weight: 800; }
+    .rhd-dobles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .rhd-dobles .pista { height: 7px; }
+    .rhd-dobles small { display: flex; justify-content: space-between; font-size: 11px; color: var(--tenue); margin-top: 3px; }
+
+    .rhd-tabla { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .rhd-tabla th { text-align: left; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--tenue);
+                    padding: 0 10px 10px; border-bottom: 1px solid var(--borde); white-space: nowrap; }
+    .rhd-tabla td { padding: 10px; border-bottom: 1px solid var(--borde); vertical-align: middle; }
+    .rhd-tabla tr:last-child td { border-bottom: 0; }
+    .rhd-tabla tbody tr:hover td { background: var(--verde-fondo); }
+    .rhd-tabla .jefe { font-weight: 700; color: var(--texto); min-width: 180px; line-height: 1.3; }
+    .rhd-tabla .centro { text-align: center; }
+    .rhd-mini { display: flex; align-items: center; gap: 8px; min-width: 110px; }
+    .rhd-mini .pista { flex: 1; height: 6px; }
+    .rhd-mini span { font-size: 12px; color: var(--texto2); white-space: nowrap; min-width: 34px; text-align: right; }
+    .rhd-scroll { overflow-x: auto; }
+    .rhd-vacio { text-align: center; font-size: 13px; font-style: italic; color: var(--tenue); padding: 24px 0; }
+</style>
+
+<div class="rhd">
+
+    {# ---------- Encabezado: evaluación en curso ---------- #}
+    <section class="rhd-tarjeta rhd-hero">
         <div>
-            <h1 class="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2 tracking-tight">
-                <span class="material-symbols-outlined text-[#72a651] font-bold">dashboard</span>
-                Panel General de Evaluaciones de Desempeño
-            </h1>
-        </div>
-        <div class="flex items-center gap-2">
-            <a href="{% url 'resumen_evaluaciones' %}" class="rounded-md border border-gray-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-zinc-200 shadow-sm hover:bg-gray-50 transition-colors">
-                Ver Tabla Completa
-            </a>
-            <a href="{% url 'exportar_resumen_excel' %}" class="inline-flex items-center gap-1.5 bg-[#72a651] hover:bg-[#5b893f] text-white font-medium py-1.5 px-3.5 rounded-md text-xs shadow-sm transition-colors">
-                <span class="material-symbols-outlined text-sm">download</span> Exportar Excel
-            </a>
-        </div>
-    </div>
-    -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 bg-white dark:bg-zinc-900 p-6 rounded-2xl border border-gray-200 dark:border-zinc-800 shadow-sm">
-        
-        <div class="flex items-center justify-between p-4 border-b md:border-b-0 md:border-r border-gray-100 dark:border-zinc-800/60 last:border-0">
-            <div class="space-y-1">
-                <span class="text-xs font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-wider">Avance General</span>
-                <p class="text-3xl font-black text-gray-900 dark:text-white tracking-tight">{{ global_kpis.general_completadas }}</p>
-                <p class="text-[11px] text-gray-400 dark:text-zinc-500">Con ambas evaluaciones listas</p>
+            <div class="rhd-etiqueta">Evaluación de desempeño{% if empresa_activa %} · {{ empresa_activa.nombre }}{% endif %}</div>
+            <h1>{% if evaluacion_activa %}{{ evaluacion_activa.descripcion }}{% else %}Sin evaluación abierta{% endif %}</h1>
+            {% if evaluacion_activa %}
+            <div class="rhd-periodo">
+                <span>📅 {{ evaluacion_activa.fecha_inicial|date:"j \d\e F" }} al {{ evaluacion_activa.fecha_final|date:"j \d\e F \d\e Y" }}</span>
+                {% if dias_restantes < 0 %}
+                    <span class="rhd-chip vencida">Venció hace {{ dias_restantes|stringformat:"d"|slice:"1:" }} día{{ dias_restantes|stringformat:"d"|slice:"1:"|pluralize }}</span>
+                {% elif dias_restantes == 0 %}
+                    <span class="rhd-chip alerta">Cierra hoy</span>
+                {% elif dias_restantes <= 7 %}
+                    <span class="rhd-chip alerta">Quedan {{ dias_restantes }} día{{ dias_restantes|pluralize }}</span>
+                {% else %}
+                    <span class="rhd-chip ok">Quedan {{ dias_restantes }} días</span>
+                {% endif %}
             </div>
-            <div class="relative flex items-center justify-center w-20 h-20 flex-shrink-0">
-                <svg class="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-                    <circle cx="50" cy="50" r="40" stroke-width="8" stroke="#f1f5f9" class="dark:stroke-zinc-800" fill="none" stroke-dasharray="251.2"/>
-                    <circle class="js-radial-circle" cx="50" cy="50" r="40" stroke-width="8" stroke="#72a651" fill="none"
-                            stroke-linecap="round" stroke-dasharray="251.2"
-                            data-offset="{{ global_kpis.general_offset|floatformat:1 }}"/>
-                </svg>
-                <span class="absolute text-xs font-bold text-gray-800 dark:text-zinc-100">{{ global_kpis.general_porcentaje|floatformat:0 }}%</span>
+            <div class="rhd-tiempo">
+                <div class="pista"><div class="relleno r-tiempo js-barra" data-pct="{{ pct_tiempo|default:0 }}"></div></div>
+                <small><span>Inicio</span><span>{{ pct_tiempo|default:0 }}% del periodo transcurrido</span><span>Cierre</span></small>
             </div>
+            {% else %}
+            <div class="rhd-periodo">Cuando se abra un periodo de evaluación, aquí se verá su avance.</div>
+            {% endif %}
         </div>
+        <div class="rhd-botones">
+            <a class="rhd-boton" href="{% url 'resumen_evaluaciones' %}"><span class="material-symbols-outlined">table_view</span>Ver consolidado</a>
+            <a class="rhd-boton primario" href="{% url 'exportar_resumen_excel' %}"><span class="material-symbols-outlined">download</span>Exportar Excel</a>
+        </div>
+    </section>
 
-        <div class="flex items-center justify-between p-4 border-b md:border-b-0 md:border-r border-gray-100 dark:border-zinc-800/60 last:border-0">
-            <div class="space-y-1">
-                <span class="text-xs font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-wider">Autoevaluación</span>
-                <p class="text-3xl font-black text-gray-900 dark:text-white tracking-tight">{{ global_kpis.auto_contestadas }}</p>
-                <p class="text-[11px] text-gray-400 dark:text-zinc-500">Colaboradores que contestaron</p>
-            </div>
-            <div class="relative flex items-center justify-center w-20 h-20 flex-shrink-0">
-                <svg class="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-                    <circle cx="50" cy="50" r="40" stroke-width="8" stroke="#f1f5f9" class="dark:stroke-zinc-800" fill="none" stroke-dasharray="251.2"/>
-                    <circle class="js-radial-circle" cx="50" cy="50" r="40" stroke-width="8" stroke="#72a651" fill="none"
-                            stroke-linecap="round" stroke-dasharray="251.2"
-                            data-offset="{{ global_kpis.auto_offset|floatformat:1 }}"/>
-                </svg>
-                <span class="absolute text-xs font-bold text-gray-800 dark:text-zinc-100">{{ global_kpis.auto_porcentaje|floatformat:0 }}%</span>
+    {# ---------- Indicadores ---------- #}
+    <section class="rhd-kpis">
+        <div class="rhd-tarjeta rhd-kpi">
+            <div>
+                <div class="icono t-gris"><span class="material-symbols-outlined">groups</span></div>
+                <div class="rhd-etiqueta">Colaboradores</div>
+                <div class="valor rhd-num">{{ total_colaboradores }}</div>
+                <div class="pie">Marcados para evaluarse</div>
             </div>
         </div>
 
-        <div class="flex items-center justify-between p-4 last:border-0">
-            <div class="space-y-1">
-                <span class="text-xs font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-wider">Evaluación Jefes</span>
-                <p class="text-3xl font-black text-gray-900 dark:text-white tracking-tight">{{ global_kpis.jefe_contestadas }}</p>
-                <p class="text-[11px] text-gray-400 dark:text-zinc-500">Revisiones autorizadas</p>
+        <div class="rhd-tarjeta rhd-kpi">
+            <div>
+                <div class="icono t-verde"><span class="material-symbols-outlined">person_check</span></div>
+                <div class="rhd-etiqueta">Autoevaluación</div>
+                <div class="valor rhd-num">{{ global_kpis.auto_contestadas }}<small>/ {{ total_colaboradores }}</small></div>
+                <div class="pie">Faltan <b>{{ faltan_auto }}</b> por contestar</div>
             </div>
-            <div class="relative flex items-center justify-center w-20 h-20 flex-shrink-0">
-                <svg class="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-                    <circle cx="50" cy="50" r="40" stroke-width="8" stroke="#f1f5f9" class="dark:stroke-zinc-800" fill="none" stroke-dasharray="251.2"/>
-                    <circle class="js-radial-circle" cx="50" cy="50" r="40" stroke-width="8" stroke="#4f46e5" fill="none"
-                            stroke-linecap="round" stroke-dasharray="251.2"
-                            data-offset="{{ global_kpis.jefe_offset|floatformat:1 }}"/>
-                </svg>
-                <span class="absolute text-xs font-bold text-gray-800 dark:text-zinc-100">{{ global_kpis.jefe_porcentaje|floatformat:0 }}%</span>
+            <div class="rhd-anillo">
+                <svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" stroke-width="10" fill="none" style="stroke: var(--pista)"/>
+                    <circle class="js-anillo" cx="50" cy="50" r="40" stroke-width="10" fill="none" stroke="#72a651" stroke-linecap="round"
+                            stroke-dasharray="251.2" stroke-dashoffset="251.2" data-pct="{{ global_kpis.auto_porcentaje|stringformat:'s' }}"/></svg>
+                <span>{{ global_kpis.auto_porcentaje|floatformat:0 }}%</span>
             </div>
         </div>
 
-    </div>
+        <div class="rhd-tarjeta rhd-kpi">
+            <div>
+                <div class="icono t-indigo"><span class="material-symbols-outlined">supervisor_account</span></div>
+                <div class="rhd-etiqueta">Evaluación de jefes</div>
+                <div class="valor rhd-num">{{ global_kpis.jefe_contestadas }}<small>/ {{ total_colaboradores }}</small></div>
+                <div class="pie">Faltan <b>{{ faltan_jefe }}</b> por evaluar</div>
+            </div>
+            <div class="rhd-anillo">
+                <svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" stroke-width="10" fill="none" style="stroke: var(--pista)"/>
+                    <circle class="js-anillo" cx="50" cy="50" r="40" stroke-width="10" fill="none" stroke="#4f46e5" stroke-linecap="round"
+                            stroke-dasharray="251.2" stroke-dashoffset="251.2" data-pct="{{ global_kpis.jefe_porcentaje|stringformat:'s' }}"/></svg>
+                <span>{{ global_kpis.jefe_porcentaje|floatformat:0 }}%</span>
+            </div>
+        </div>
 
-    <div class="my-6 border-b-2 border-red-500/80 rounded-full shadow-sm"></div>
+        <div class="rhd-tarjeta rhd-kpi">
+            <div>
+                <div class="icono t-verde"><span class="material-symbols-outlined">task_alt</span></div>
+                <div class="rhd-etiqueta">Avance general</div>
+                <div class="valor rhd-num">{{ global_kpis.general_completadas }}<small>/ {{ total_colaboradores }}</small></div>
+                <div class="pie">Con ambas evaluaciones listas</div>
+            </div>
+            <div class="rhd-anillo">
+                <svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" stroke-width="10" fill="none" style="stroke: var(--pista)"/>
+                    <circle class="js-anillo" cx="50" cy="50" r="40" stroke-width="10" fill="none" stroke="#5b893f" stroke-linecap="round"
+                            stroke-dasharray="251.2" stroke-dashoffset="251.2" data-pct="{{ global_kpis.general_porcentaje|stringformat:'s' }}"/></svg>
+                <span>{{ global_kpis.general_porcentaje|floatformat:0 }}%</span>
+            </div>
+        </div>
+    </section>
 
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        
-        <div class="bg-white dark:bg-zinc-900 p-6 rounded-2xl border border-gray-200 dark:border-zinc-800 shadow-sm space-y-5">
-            <h2 class="text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-zinc-500">Avance por Departamento</h2>
-            
-            <div class="space-y-4">
-                {% for nombre_dep, values in departamentos.items %}
-                <div class="grid grid-cols-12 items-center text-xs gap-x-4">
-                    
-                    <span class="font-bold text-gray-700 dark:text-zinc-300 truncate col-span-4" title="{{ nombre_dep }}">
-                        {{ nombre_dep }}
-                    </span>
-                    
-                    <div style="background-color: #f1f5f9; height: 12px;" class="rounded-full overflow-hidden relative shadow-inner dark:bg-zinc-800 col-span-7">
-                        <div class="js-dep-bar rounded-full h-full transition-all duration-500" 
-                             style="background-color: #72a651; width: 0%;"
-                             data-progress="{{ values.porcentaje }}"></div>
+    {# ---------- Estado de los colaboradores ---------- #}
+    <section class="rhd-tarjeta rhd-estado">
+        <div class="cab">
+            <b>¿En qué va cada colaborador?</b>
+            <span class="rhd-etiqueta">{{ faltan_ambas }} pendiente{{ faltan_ambas|pluralize }} de cerrar</span>
+        </div>
+        <div class="rhd-apilada">
+            {% for e in estado_colaboradores %}{% if e.n %}<div class="e-{{ e.clave }} js-barra" data-pct="{{ e.pct|stringformat:'s' }}" title="{{ e.nombre }}: {{ e.n }}"></div>{% endif %}{% endfor %}
+        </div>
+        <div class="rhd-leyenda">
+            {% for e in estado_colaboradores %}
+            <div><i class="e-{{ e.clave }}"></i><span><b class="rhd-num">{{ e.n }}</b> {{ e.nombre }}</span></div>
+            {% endfor %}
+        </div>
+    </section>
+
+    {# ---------- Departamentos y jefes ---------- #}
+    <section class="rhd-paneles">
+        <div class="rhd-tarjeta rhd-panel">
+            <div class="cab">
+                <h2>Avance por departamento</h2>
+                <div class="rhd-claves"><span><i class="r-verde"></i>Auto</span><span><i class="r-indigo"></i>Jefe</span></div>
+            </div>
+            {% for nombre_dep, v in departamentos.items %}
+            <div class="rhd-depto">
+                <div class="fila">
+                    <span class="nombre" title="{{ nombre_dep }}">{{ nombre_dep }}<small>{{ v.num_empleados }} colaborador{{ v.num_empleados|pluralize:"es" }}</small></span>
+                    <span class="total rhd-num">{{ v.porcentaje|floatformat:0 }}%</span>
+                </div>
+                <div class="rhd-dobles">
+                    <div>
+                        <div class="pista"><div class="relleno r-verde js-barra" data-pct="{{ v.auto_pct }}"></div></div>
+                        <small><span>Autoevaluación</span><span class="rhd-num">{{ v.auto_evaluados }}/{{ v.num_empleados }}</span></small>
                     </div>
-
-                    <span class="font-black text-gray-900 dark:text-white text-right col-span-1">
-                        {{ values.porcentaje|floatformat:0 }}%
-                    </span>
-                </div>
-                {% empty %}
-                <div class="text-center py-6">
-                    <p class="text-xs italic text-gray-400">No se encontraron departamentos activos.</p>
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-
-        <div class="bg-white dark:bg-zinc-900 p-6 rounded-2xl border border-gray-200 dark:border-zinc-800 shadow-sm space-y-5">
-            <h2 class="text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-zinc-500">Estatus de Evaluaciones por Jefe</h2>
-            
-            <div class="space-y-4">
-                {% for j in jefes_data %}
-                <div class="grid grid-cols-12 items-center text-xs gap-x-4">
-                    
-                    <span class="font-bold text-gray-900 dark:text-white truncate col-span-5" title="{{ j.nombre }}">
-                        {{ j.nombre }}
-                    </span>
-                    
-                    <div style="background-color: #f1f5f9; height: 12px;" class="rounded-full overflow-hidden relative shadow-inner dark:bg-zinc-800 col-span-6">
-                        <div class="js-jefe-bar rounded-full h-full transition-all duration-500" 
-                            style="background-color: #4f46e5; width: 0%;"
-                            data-progress="{{ j.jefe_pct }}"></div>
+                    <div>
+                        <div class="pista"><div class="relleno r-indigo js-barra" data-pct="{{ v.jefe_pct }}"></div></div>
+                        <small><span>Jefe</span><span class="rhd-num">{{ v.evaluados }}/{{ v.num_empleados }}</span></small>
                     </div>
-
-                    <span class="font-black text-indigo-600 dark:text-indigo-400 text-right col-span-1 whitespace-nowrap">
-                        {{ j.jefe_pct|floatformat:0 }}%
-                    </span>
                 </div>
-                {% empty %}
-                <div class="text-center py-6">
-                    <p class="text-xs italic text-gray-400">No se encontraron líderes asignados.</p>
-                </div>
-                {% endfor %}
             </div>
+            {% empty %}
+            <div class="rhd-vacio">No se encontraron departamentos con colaboradores a evaluar.</div>
+            {% endfor %}
         </div>
 
-    </div>
-
+        <div class="rhd-tarjeta rhd-panel">
+            <div class="cab">
+                <h2>Avance por jefe</h2>
+                <div class="rhd-claves"><span><i class="r-verde"></i>Auto</span><span><i class="r-indigo"></i>Jefe</span></div>
+            </div>
+            <div class="rhd-scroll">
+                <table class="rhd-tabla">
+                    <thead><tr><th>Jefe</th><th class="centro">Equipo</th><th>Autoevaluación</th><th>Evaluación jefe</th><th>Estado</th></tr></thead>
+                    <tbody>
+                    {% for j in jefes_data %}
+                    <tr>
+                        <td class="jefe" title="{{ j.nombre }}">{{ j.nombre }}</td>
+                        <td class="centro rhd-num">{{ j.total_empleados }}</td>
+                        <td><div class="rhd-mini"><div class="pista"><div class="relleno r-verde js-barra" data-pct="{{ j.auto_pct|stringformat:'s' }}"></div></div>
+                            <span class="rhd-num">{{ j.auto_contestadas }}/{{ j.total_empleados }}</span></div></td>
+                        <td><div class="rhd-mini"><div class="pista"><div class="relleno r-indigo js-barra" data-pct="{{ j.jefe_pct|stringformat:'s' }}"></div></div>
+                            <span class="rhd-num">{{ j.jefe_contestadas }}/{{ j.total_empleados }}</span></div></td>
+                        <td>
+                            {% if j.total_empleados and j.jefe_contestadas >= j.total_empleados %}<span class="rhd-chip ok">Completo</span>
+                            {% elif j.jefe_contestadas %}<span class="rhd-chip alerta">En proceso</span>
+                            {% else %}<span class="rhd-chip neutro">Pendiente</span>{% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="5" class="rhd-vacio">No se encontraron jefes asignados.</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
 </div>
 
 <script>
-    document.addEventListener("DOMContentLoaded", function() {
-        // 1. Círculos Radiales Superiores
-        document.querySelectorAll('.js-radial-circle').forEach(function(circle) {
-            var rawOffset = circle.getAttribute('data-offset') || "0";
-            var cleanOffset = parseFloat(rawOffset.replace(',', '.'));
-            if (!isNaN(cleanOffset)) {
-                circle.style.strokeDashoffset = cleanOffset + "px";
-            }
-        });
-
-        // 2. Renderizado para las barras de los Departamentos (Elimina el error del editor)
-        document.querySelectorAll('.js-dep-bar').forEach(function(bar) {
-            var rawPct = bar.getAttribute('data-progress') || "0";
-            var cleanPct = parseFloat(rawPct.replace(',', '.'));
-            if (!isNaN(cleanPct)) {
-                bar.style.width = cleanPct + "%";
-            }
-        });
-
-        // 3. Renderizado para las barras de progreso de los Jefes
-        document.querySelectorAll('.js-jefe-bar').forEach(function(bar) {
-            var rawPct = bar.getAttribute('data-progress') || "0";
-            var cleanPct = parseFloat(rawPct.replace(',', '.'));
-            if (!isNaN(cleanPct)) {
-                bar.style.width = cleanPct + "%";
-            }
+    document.addEventListener("DOMContentLoaded", function () {
+        function numero(t) { var n = parseFloat(String(t || "0").replace(",", ".")); return isNaN(n) ? 0 : Math.max(0, Math.min(n, 100)); }
+        // Se dibujan un instante después para que se vea la animación
+        requestAnimationFrame(function () {
+            document.querySelectorAll(".rhd .js-anillo").forEach(function (c) {
+                c.style.transition = "stroke-dashoffset .9s cubic-bezier(.22,1,.36,1)";
+                c.style.strokeDashoffset = (251.2 * (1 - numero(c.dataset.pct) / 100)).toFixed(1);
+            });
+            document.querySelectorAll(".rhd .js-barra").forEach(function (b) { b.style.width = numero(b.dataset.pct) + "%"; });
         });
     });
 </script>

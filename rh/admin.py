@@ -201,6 +201,40 @@ class CustomAdminSite(UnfoldAdminSite):
             "jefe_offset": offset_jefe,
         }
 
+        # Detalle para el tablero: % de autoevaluación y de jefe por departamento
+        for valores in departamentos_dict.values():
+            n = valores['num_empleados']
+            valores['auto_pct'] = round(valores['auto_evaluados'] / n * 100) if n else 0
+            valores['jefe_pct'] = round(valores['evaluados'] / n * 100) if n else 0
+
+        # Estado de cada colaborador: completas, solo una de las dos o sin iniciar
+        solo_auto = max(total_auto_global - total_ambas_completadas_global, 0)
+        solo_jefe = max(total_jefe_global - total_ambas_completadas_global, 0)
+        sin_iniciar = max(total_global_empleados - total_ambas_completadas_global - solo_auto - solo_jefe, 0)
+        def pct(n):
+            return round(n / total_global_empleados * 100, 1) if total_global_empleados else 0
+        extra_context["estado_colaboradores"] = [
+            {'clave': 'completas', 'nombre': 'Ambas evaluaciones', 'n': total_ambas_completadas_global, 'pct': pct(total_ambas_completadas_global)},
+            {'clave': 'auto', 'nombre': 'Solo autoevaluación', 'n': solo_auto, 'pct': pct(solo_auto)},
+            {'clave': 'jefe', 'nombre': 'Solo evaluación del jefe', 'n': solo_jefe, 'pct': pct(solo_jefe)},
+            {'clave': 'pendiente', 'nombre': 'Sin iniciar', 'n': sin_iniciar, 'pct': pct(sin_iniciar)},
+        ]
+        extra_context["total_colaboradores"] = total_global_empleados
+        extra_context["faltan_auto"] = max(total_global_empleados - total_auto_global, 0)
+        extra_context["faltan_jefe"] = max(total_global_empleados - total_jefe_global, 0)
+        extra_context["faltan_ambas"] = max(total_global_empleados - total_ambas_completadas_global, 0)
+
+        # Evaluación en curso y días que le quedan
+        from django.utils import timezone
+        evaluacion = Evaluacion.objects.filter(empresa_id=empresa_activa, cerrada=False).order_by('-fecha_final').first()
+        extra_context["evaluacion_activa"] = evaluacion
+        if evaluacion:
+            hoy = timezone.localdate()
+            extra_context["dias_restantes"] = (evaluacion.fecha_final - hoy).days
+            duracion = max((evaluacion.fecha_final - evaluacion.fecha_inicial).days, 1)
+            transcurrido = min(max((hoy - evaluacion.fecha_inicial).days, 0), duracion)
+            extra_context["pct_tiempo"] = round(transcurrido / duracion * 100)
+
         extra_context["departamentos"] = departamentos_dict
         extra_context["jefes_data"] = jefes_data
 
