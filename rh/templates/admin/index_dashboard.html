@@ -139,7 +139,7 @@
     .rhd-tabla tbody tr:hover td { background: var(--verde-fondo); }
     .rhd-tabla .jefe { font-weight: 700; color: var(--texto); min-width: 180px; line-height: 1.3; }
     .rhd-tabla .centro { text-align: center; }
-    .rhd-mini { display: flex; align-items: center; gap: 8px; min-width: 110px; }
+    .rhd-mini { display: flex; align-items: center; gap: 10px; min-width: 160px; }
     .rhd-mini .pista { flex: 1; height: 6px; }
     .rhd-mini span { font-size: 12px; color: var(--texto2); white-space: nowrap; min-width: 34px; text-align: right; }
     .rhd-scroll { overflow-x: auto; }
@@ -285,18 +285,16 @@
         <div class="rhd-tarjeta rhd-panel">
             <div class="cab">
                 <h2>Avance por jefe</h2>
-                <div class="rhd-claves"><span><i class="r-verde"></i>Auto</span><span><i class="r-indigo"></i>Jefe</span></div>
+                <span class="rhd-claves">Evaluaciones de cada jefe a su equipo</span>
             </div>
             <div class="rhd-scroll">
                 <table class="rhd-tabla">
-                    <thead><tr><th>Jefe</th><th class="centro">Equipo</th><th>Autoevaluación</th><th>Evaluación jefe</th><th>Estado</th></tr></thead>
+                    <thead><tr><th>Jefe</th><th class="centro">Equipo</th><th>Colaboradores evaluados</th><th>Estado</th></tr></thead>
                     <tbody>
                     {% for j in jefes_data %}
                     <tr>
                         <td class="jefe" title="{{ j.nombre }}">{{ j.nombre }}</td>
                         <td class="centro rhd-num">{{ j.total_empleados }}</td>
-                        <td><div class="rhd-mini"><div class="pista"><div class="relleno r-verde js-barra" data-pct="{{ j.auto_pct|stringformat:'s' }}"></div></div>
-                            <span class="rhd-num">{{ j.auto_contestadas }}/{{ j.total_empleados }}</span></div></td>
                         <td><div class="rhd-mini"><div class="pista"><div class="relleno r-indigo js-barra" data-pct="{{ j.jefe_pct|stringformat:'s' }}"></div></div>
                             <span class="rhd-num">{{ j.jefe_contestadas }}/{{ j.total_empleados }}</span></div></td>
                         <td>
@@ -306,7 +304,7 @@
                         </td>
                     </tr>
                     {% empty %}
-                    <tr><td colspan="5" class="rhd-vacio">No se encontraron jefes asignados.</td></tr>
+                    <tr><td colspan="4" class="rhd-vacio">No se encontraron jefes asignados.</td></tr>
                     {% endfor %}
                     </tbody>
                 </table>
