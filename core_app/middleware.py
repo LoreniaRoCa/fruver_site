@@ -51,7 +51,12 @@ class NavegacionDinamicaMiddleware:
                 })
 
             # 🌟 CONSTRUCCIÓN FINAL DE LAESTRUCTURA DE NAVEGACIÓN PARA UNFOLD:
-            navigation_structure = []
+            # Siempre arriba: volver al inicio del módulo (en RH, el tablero de evaluaciones) y a todos los módulos
+            inicio = []
+            if modulo_slug == 'rh':
+                inicio.append({"title": "Inicio", "link": "/admin/rh/dashboard/", "icon": "dashboard"})
+            inicio.append({"title": "Todos los módulos", "link": "/admin/dashboard/", "icon": "apps"})
+            navigation_structure = [{"title": "Inicio", "separator": False, "items": inicio}]
             for grupo_titulo, items in agrupado.items():
                 if items:  # Si el usuario tiene acceso a al menos un ítem del grupo
                     navigation_structure.append({

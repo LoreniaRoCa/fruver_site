@@ -100,7 +100,7 @@ def panel_evaluacion_view(request, subordinado_id=None):
     evaluacion_activa = Evaluacion.objects.filter().last()
     if not evaluacion_activa:
         context = {'error_mensaje': "No hay evaluaciones configuradas en este momento."}
-        return render(request, 'evaluaciones/panel_evaluacion.html', context)
+        return render(request, 'evaluaciones/panel_evaluacion.html', contexto_admin(request, context))
 
 # --- DETECTAR MODO CONSULTA DESDE CONSOLIDADO ---
     modo_consulta = request.GET.get('modo_consulta') == '1'
@@ -262,7 +262,7 @@ def panel_evaluacion_view(request, subordinado_id=None):
         'es_autoevaluacion': es_autoevaluacion,
         'modo_consulta': modo_consulta,  # <--- NUEVA BANDERA ENVIADA AL HTML
     }
-    return render(request, 'evaluaciones/panel_evaluacion.html', context)
+    return render(request, 'evaluaciones/panel_evaluacion.html', contexto_admin(request, context))
 
 @login_required
 def guardar_evaluacion_view(request):
@@ -372,6 +372,15 @@ def guardar_evaluacion_view(request):
 
     return redirect('panel_evaluacion')
         
+def contexto_admin(request, context):
+    """Agrega el contexto del sitio administrativo (menú lateral, encabezado) a las pantallas propias de RH,
+    para que se vean con el menú y se pueda regresar al inicio del módulo."""
+    from .admin import admin_site
+    completo = admin_site.each_context(request)
+    completo.update(context)
+    return completo
+
+
 def Exam_clean_text(text):
     return text if text != "" else None
 
@@ -478,7 +487,7 @@ def resumen_evaluaciones_view(request):
         'tabla_datos': tabla_datos,
         'usuario_logueado': usuario_logueado,
     }
-    return render(request, 'evaluaciones/resumen_evaluaciones.html', context)
+    return render(request, 'evaluaciones/resumen_evaluaciones.html', contexto_admin(request, context))
 
 @login_required
 def descargar_plantilla_excel(request, model_name):
@@ -976,7 +985,7 @@ def asignacion_competencias_view(request):
         'filter_dept': filter_dept,
         'filter_clasif': filter_clasif,
     }
-    return render(request, 'evaluaciones/asignacion_competencias.html', context)
+    return render(request, 'evaluaciones/asignacion_competencias.html', contexto_admin(request, context))
 
 @login_required
 @user_passes_test(lambda u: u.is_staff, login_url='admin:index')
