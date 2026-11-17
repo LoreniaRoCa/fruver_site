@@ -108,7 +108,7 @@
                                             {{ fila.promedio_auto|punto_decimal }}
                                         </a>
                                     {% else %}
-                                        <span class="text-slate-400 font-normal">0.0</span>
+                                        {% if fila.avance_auto %}<span class="text-amber-600 font-normal text-xs" title="Aún no contesta todas las competencias; la calificación aparece al completarla">{{ fila.avance_auto }}</span>{% else %}<span class="text-slate-400 font-normal">0.0</span>{% endif %}
                                     {% endif %}
                                 </td>
 
@@ -119,7 +119,7 @@
                                             {{ fila.promedio_jefe|punto_decimal }}
                                         </a>
                                     {% else %}
-                                        <span class="text-slate-400 font-normal">0.0</span>
+                                        {% if fila.avance_jefe %}<span class="text-amber-600 font-normal text-xs" title="Aún no contesta todas las competencias; la calificación aparece al completarla">{{ fila.avance_jefe }}</span>{% else %}<span class="text-slate-400 font-normal">0.0</span>{% endif %}
                                     {% endif %}
                                 </td>                               
                                 <!-- <td class="text-center font-bold text-emerald-600 dark:text-emerald-400 text-base">

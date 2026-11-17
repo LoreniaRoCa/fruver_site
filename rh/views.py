@@ -28,7 +28,7 @@ from django.contrib.auth import login as auth_login
 # 💡 INCLUSIÓN: Importamos el nuevo modelo de la tabla intermedia
 from .models import (
     Empleado, CompetenciaClasificacion, Competencia, Evaluacion, 
-    EvaluacionDet, EvaluacionComentario, EmpleadoCompetenciaAsignada, TokenAccesoEvaluacion, Empresa
+    EvaluacionDet, EvaluacionComentario, EmpleadoCompetenciaAsignada, TokenAccesoEvaluacion, Empresa, EvaluacionEntrega
 )
 from django.db import connection
 from django.utils import timezone
@@ -169,6 +169,8 @@ def panel_evaluacion_view(request, subordinado_id=None):
         tipo=tipo_evaluador
     )
     ya_contestado = respuestas_previos.exists()
+    entrega_actual = EvaluacionEntrega.objects.filter(
+        id_evaluacion=evaluacion_activa, id_empleado=empleado_a_evaluar, tipo=tipo_evaluador).first()
     
     notas_guardadas = {}
     for r in respuestas_previos:
@@ -195,20 +197,23 @@ def panel_evaluacion_view(request, subordinado_id=None):
         se_evalua=True
     ).exclude(id_empleado=usuario_logueado.id_empleado)
     
+    entregas_equipo = {e.id_empleado_id: e for e in EvaluacionEntrega.objects.filter(
+        id_evaluacion=evaluacion_activa, tipo='J', id_empleado__in=equipo)}
     for miembro in equipo:
-        # Verificamos si el jefe logueado ya envió la evaluación ('J') para este miembro
-        ya_evaluado_por_jefe = EvaluacionDet.objects.filter(
-            id_evaluacion=evaluacion_activa,
-            id_empleado=miembro,
-            tipo='J'
-        ).exists()
-        
+        # Completa = 'Contestado'; con algo contestado = 'En proceso (x/y)'; sin nada = 'Pendiente'
+        entrega = entregas_equipo.get(miembro.pk)
+        if entrega and entrega.completa:
+            estatus = 'Contestado'
+        elif entrega and entrega.contestadas:
+            estatus = f'En proceso ({entrega.contestadas}/{entrega.total})'
+        else:
+            estatus = 'Pendiente'
         subordinados_pendientes.append({
             'empleado': miembro,
-            'estatus': 'Contestado' if ya_evaluado_por_jefe else 'Pendiente'
+            'estatus': estatus
         })
 
-    subordinados_pendientes.sort(key=lambda x: (x['estatus'] != 'Pendiente', x['empleado'].nombre_largo))
+    subordinados_pendientes.sort(key=lambda x: (x['estatus'] == 'Contestado', x['estatus'] != 'Pendiente', x['empleado'].nombre_largo))
     # =========================================================================
     # 3. CONSTRUCCIÓN DE LA ESTRUCTURA PARA EL HTML
     # =========================================================================
@@ -261,6 +266,7 @@ def panel_evaluacion_view(request, subordinado_id=None):
         'subordinados': subordinados_pendientes,
         'es_autoevaluacion': es_autoevaluacion,
         'modo_consulta': modo_consulta,  # <--- NUEVA BANDERA ENVIADA AL HTML
+        'entrega_actual': entrega_actual,
     }
     return render(request, 'evaluaciones/panel_evaluacion.html', contexto_admin(request, context))
 
@@ -363,10 +369,19 @@ def guardar_evaluacion_view(request):
 
         nombre_evaluacion = evaluacion_activa.descripcion if evaluacion_activa.descripcion else "Evaluación de Desempeño"
 
-        messages.success(
-            request, 
-            f'La evaluación "{nombre_evaluacion}" de {evaluado.nombre_largo} se guardó correctamente.'
-        )
+        # Avance: queda completa la primera vez que se contestan todas las competencias
+        entrega = EvaluacionEntrega.actualizar(evaluacion_activa, evaluado, tipo_evaluador)
+        if entrega.completa:
+            messages.success(
+                request,
+                f'La evaluación "{nombre_evaluacion}" de {evaluado.nombre_largo} se guardó y está completa.'
+            )
+        else:
+            messages.warning(
+                request,
+                f'Se guardó el avance de la evaluación de {evaluado.nombre_largo}: {entrega.contestadas} de {entrega.total} '
+                f'competencias contestadas. La calificación aparecerá en el consolidado cuando estén todas contestadas.'
+            )
         
         return redirect('panel_evaluacion')
 
@@ -379,6 +394,27 @@ def contexto_admin(request, context):
     completo = admin_site.each_context(request)
     completo.update(context)
     return completo
+
+
+def entregas_por_empleado(empresa):
+    """{(id del empleado, tipo): entrega} de la evaluación abierta más reciente de la empresa."""
+    from django.db.models import Q
+    evaluacion = (Evaluacion.objects.filter(cerrada=False).filter(Q(empresa_id=empresa) | Q(empresa__isnull=True))
+                  .order_by('-fecha_final').first())
+    if not evaluacion:
+        return {}
+    return {(e.id_empleado_id, e.tipo): e for e in EvaluacionEntrega.objects.filter(id_evaluacion=evaluacion)}
+
+
+def avance_evaluaciones(entregas, empleado_pk):
+    """Para el consolidado: {'E': {'completa', 'texto'}, 'J': {...}}; texto = 'En proceso x/y' si va a medias."""
+    avance = {}
+    for tipo in ('E', 'J'):
+        e = entregas.get((empleado_pk, tipo))
+        completa = bool(e and e.completa)
+        texto = '' if completa or not e or not e.contestadas else f'En proceso {e.contestadas}/{e.total}'
+        avance[tipo] = {'completa': completa, 'texto': texto}
+    return avance
 
 
 def Exam_clean_text(text):
@@ -412,6 +448,7 @@ def resumen_evaluaciones_view(request):
 
     tabla_datos = []
     nombre_evaluacion = "Evaluación"  # Valor por defecto
+    entregas = entregas_por_empleado(empresa_activa)
 
     with connection.cursor() as cursor:
         cursor.execute(query, [empresa_activa])
@@ -421,6 +458,8 @@ def resumen_evaluaciones_view(request):
             nombre_emp = row[0]
             id_empleado = row[6]
             departamento = row[7]
+            id = row[8]
+            avance = avance_evaluaciones(entregas, id)
             # Formateamos valores numéricos controlando los Nulos (None)
             auto_gen = float(row[1]) if row[1] is not None else 0.0
             auto_esp = float(row[2]) if row[2] is not None else 0.0
@@ -443,6 +482,12 @@ def resumen_evaluaciones_view(request):
             else:
                 promedio_jefe = eval_gen if eval_gen > 0 else eval_esp
 
+            # Solo cuentan las evaluaciones completas (todas sus competencias contestadas)
+            if not avance['E']['completa']:
+                promedio_auto = 0.0
+            if not avance['J']['completa']:
+                promedio_jefe = 0.0
+
             # Omitir registros sin ninguna evaluación iniciada
             #if promedio_auto == 0.0 and promedio_jefe == 0.0:
             #    continue
@@ -454,7 +499,9 @@ def resumen_evaluaciones_view(request):
                 promedio_total = promedio_auto if promedio_auto > 0 else promedio_jefe
 
             # --- NUEVA LÓGICA DE GRATIFICACIÓN (TEXTO EN RANGOS) ---
-            if promedio_total is None or promedio_total == 0.0:
+            if (promedio_total is None or promedio_total == 0.0) and (avance['E']['texto'] or avance['J']['texto']):
+                gratificacion = "Incompleta"   # va a medias: aún no cuenta su calificación
+            elif promedio_total is None or promedio_total == 0.0:
                 gratificacion = "Sin evaluar"
             elif promedio_auto == 0 or promedio_jefe == 0:
                 gratificacion = "Incompleta"
@@ -480,6 +527,8 @@ def resumen_evaluaciones_view(request):
                 'id_empleado': id_empleado,
                 'departamento': departamento,
                 'id': id,
+                'avance_auto': avance['E']['texto'],
+                'avance_jefe': avance['J']['texto'],
             })
 
     context = {
@@ -555,7 +604,8 @@ def exportar_resumen_excel(request):
             eval_gen,
             eval_esp,
             evaluacion,
-            departamento
+            departamento,
+            id
         FROM rh_vista_resumen_evaluaciones
         WHERE  empresa = %s
         ORDER BY nombre_largo ASC;
@@ -563,6 +613,7 @@ def exportar_resumen_excel(request):
 
     tabla_datos = []
     nombre_evaluacion = "Consolidado de Resultados"
+    entregas = entregas_por_empleado(empresa_activa)
 
     with connection.cursor() as cursor:
         cursor.execute(query, [empresa_activa])
@@ -571,6 +622,7 @@ def exportar_resumen_excel(request):
         for row in rows:
             nombre_emp = row[0]
             departamento = row[6]
+            avance = avance_evaluaciones(entregas, row[7])
             # Si el usuario usó la barra de búsqueda en pantalla, filtramos aquí en memoria
             if buscar_texto and buscar_texto not in nombre_emp.lower():
                 continue
@@ -596,6 +648,12 @@ def exportar_resumen_excel(request):
             else:
                 promedio_jefe = eval_gen if eval_gen > 0 else eval_esp
 
+            # Solo cuentan las evaluaciones completas (todas sus competencias contestadas)
+            if not avance['E']['completa']:
+                promedio_auto = 0.0
+            if not avance['J']['completa']:
+                promedio_jefe = 0.0
+
             # Omitir registros sin ninguna evaluación iniciada (igual que en el HTML)
             #if promedio_auto == 0.0 and promedio_jefe == 0.0:
             #    continue
@@ -607,7 +665,9 @@ def exportar_resumen_excel(request):
                 promedio_total = promedio_auto if promedio_auto > 0 else promedio_jefe
 
             # --- LÓGICA DE GRATIFICACIÓN (TEXTO EN RANGOS IDÉNTICO A TU PANTALLA) ---
-            if promedio_total is None or promedio_total == 0.0:
+            if (promedio_total is None or promedio_total == 0.0) and (avance['E']['texto'] or avance['J']['texto']):
+                gratificacion = "Incompleta"   # va a medias: aún no cuenta su calificación
+            elif promedio_total is None or promedio_total == 0.0:
                 gratificacion = "Sin evaluar"
             elif promedio_auto == 0 or promedio_jefe == 0:
                 gratificacion = "Incompleta"                    

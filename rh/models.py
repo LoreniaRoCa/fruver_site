@@ -407,3 +407,52 @@ class TokenAccesoEvaluacion(models.Model):
         # (antes eran 5 días desde que se envió el correo)
         hasta = self.vigente_hasta()
         return not self.utilizado and hasta is not None and timezone.localdate() <= hasta
+
+def competencias_requeridas(evaluado, tipo):
+    """IDs de las competencias que lleva la evaluación de un empleado: todas las generales más sus específicas
+    asignadas (igual que el panel). En la autoevaluación de quien no se evalúa no hay ninguna."""
+    if tipo == 'E' and not evaluado.se_evalua:
+        return set()
+    generales = Competencia.objects.filter(id_clasificacion__tipo='G').values_list('id_competencia', flat=True)
+    especificas = EmpleadoCompetenciaAsignada.objects.filter(id_empleado=evaluado).values_list('id_competencia_id', flat=True)
+    return set(generales) | set(especificas)
+
+
+class EvaluacionEntrega(models.Model):
+    """Avance de cada evaluación (autoevaluación 'E' o del jefe 'J') de un empleado en un periodo.
+    Queda como completa la primera vez que se contestan todas sus competencias y así se queda, aunque después
+    se le asignen más: el consolidado muestra la calificación solo de las completas."""
+    TIPOS = [('E', 'Autoevaluación'), ('J', 'Evaluación del jefe')]
+
+    id_evaluacion = models.ForeignKey(Evaluacion, on_delete=models.CASCADE, db_column='id_evaluacion', verbose_name="Evaluación")
+    id_empleado = models.ForeignKey(Empleado, on_delete=models.CASCADE, db_column='id_empleado', verbose_name="Evaluado")
+    tipo = models.CharField(max_length=1, choices=TIPOS)
+    contestadas = models.PositiveIntegerField(default=0)
+    total = models.PositiveIntegerField(default=0, help_text="Competencias que llevaba la evaluación en el último guardado")
+    completa = models.BooleanField(default=False)
+    fecha_completa = models.DateTimeField(null=True, blank=True, verbose_name="Completada el")
+    actualizado = models.DateTimeField(auto_now=True)
+    empresa = models.ForeignKey(Empresa, on_delete=models.SET_NULL, null=True, blank=True, db_column='empresa')
+
+    class Meta:
+        db_table = 'rh_evaluacion_entrega'
+        unique_together = ('id_evaluacion', 'id_empleado', 'tipo')
+        verbose_name = "Entrega de evaluación"
+        verbose_name_plural = "Entregas de evaluación"
+
+    @classmethod
+    def actualizar(cls, evaluacion, evaluado, tipo):
+        """Recalcula el avance después de guardar; devuelve la entrega."""
+        requeridas = competencias_requeridas(evaluado, tipo)
+        contestadas = set(EvaluacionDet.objects.filter(
+            id_evaluacion=evaluacion, id_empleado=evaluado, tipo=tipo, calificacion__gt=0
+        ).values_list('id_competencia_id', flat=True))
+        entrega, _ = cls.objects.get_or_create(
+            id_evaluacion=evaluacion, id_empleado=evaluado, tipo=tipo, defaults={'empresa_id': evaluado.empresa_id})
+        entrega.contestadas = len(requeridas & contestadas)
+        entrega.total = len(requeridas)
+        if not entrega.completa and requeridas and requeridas <= contestadas:
+            entrega.completa = True
+            entrega.fecha_completa = timezone.now()
+        entrega.save()
+        return entrega

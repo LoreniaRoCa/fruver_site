@@ -1339,7 +1339,7 @@ def matriz_competencias_html(queryset, guardados_ids, url_agregar='', copiar=Non
     <div class="cmp-chips" id="cmp-chips"></div>
     <div class="cmp-acciones">
       <select id="cmp-copiar-de" {'disabled' if not copiar['empleados'] else ''}>
-        <option value="">{'Copiar las competencias de otro empleado con el mismo puesto…' if copiar['empleados'] else 'No hay otros empleados de este puesto con competencias asignadas'}</option>
+        <option value="">{'Copiar las competencias de otro empleado del mismo puesto y departamento…' if copiar['empleados'] else 'No hay otros empleados de este puesto y departamento con competencias asignadas'}</option>
         {opciones_copiar}
       </select>
       <button type="button" class="cmp-btn primario" id="cmp-copiar" disabled>Copiar competencias</button>
@@ -1588,10 +1588,11 @@ class EmpleadoAdmin(CamposDeNominaMixin, CatalogosOrdenadosAdmin, EmpresaFilterA
         return super().change_view(request, object_id, form_url, extra_context=extra_context)
 
     def competencias_para_copiar(self, obj, queryset):
-        """Empleados de la misma empresa y puesto que ya tienen competencias asignadas, con sus competencias."""
+        """Empleados de la misma empresa, puesto y departamento que ya tienen competencias asignadas, con sus competencias."""
         asignadas = {}
         for emp_id, comp_id in EmpleadoCompetenciaAsignada.objects.filter(
-                id_empleado__empresa_id=obj.empresa_id, id_empleado__id_puesto_id=obj.id_puesto_id
+                id_empleado__empresa_id=obj.empresa_id, id_empleado__id_puesto_id=obj.id_puesto_id,
+                id_empleado__id_departamento_id=obj.id_departamento_id
         ).exclude(id_empleado_id=obj.pk).values_list('id_empleado_id', 'id_competencia_id'):
             asignadas.setdefault(emp_id, []).append(comp_id)
         empleados = [{'id': e.pk, 'nombre': e.nombre_largo, 'comps': sorted(asignadas[e.pk])}

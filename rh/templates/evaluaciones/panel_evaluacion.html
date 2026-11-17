@@ -331,6 +331,14 @@
                             {% if not modo_consulta %}
                                 <!-- 🟢 CONTENEDOR PRINCIPAL SIN JUSTIFY-END -->
                                 <div class="max-w-full overflow-hidden pt-6 pb-12 mt-8 border-t border-slate-200 dark:border-neutral-800">
+                                    {% if entrega_actual %}
+                                    <p class="text-sm mb-4 {% if entrega_actual.completa %}text-green-700 dark:text-green-400{% else %}text-amber-700 dark:text-amber-400{% endif %}">
+                                        {% if entrega_actual.completa %}✔ Evaluación completa{% if entrega_actual.fecha_completa %} desde el {{ entrega_actual.fecha_completa|date:"d/m/Y" }}{% endif %}. Puedes modificar tus respuestas mientras la evaluación esté abierta.
+                                        {% else %}Avance guardado: {{ entrega_actual.contestadas }} de {{ entrega_actual.total }} competencias contestadas. La calificación contará cuando contestes todas.{% endif %}
+                                    </p>
+                                    {% else %}
+                                    <p class="text-sm mb-4 text-slate-500">Puedes guardar tu avance y terminar después; la calificación contará cuando contestes todas las competencias.</p>
+                                    {% endif %}
                                     <div class="flex flex-col-reverse sm:flex-row items-center justify-between gap-4 w-full">
                                         
                                         <!-- 🔴 Cerrar sesión -->
