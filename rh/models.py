@@ -445,7 +445,7 @@ class EvaluacionEntrega(models.Model):
         """Recalcula el avance después de guardar; devuelve la entrega."""
         requeridas = competencias_requeridas(evaluado, tipo)
         contestadas = set(EvaluacionDet.objects.filter(
-            id_evaluacion=evaluacion, id_empleado=evaluado, tipo=tipo, calificacion__gt=0
+            id_evaluacion=evaluacion, id_empleado=evaluado, tipo=tipo, calificacion__isnull=False   # 0 = NA (no aplica): sí cuenta como contestada
         ).values_list('id_competencia_id', flat=True))
         entrega, _ = cls.objects.get_or_create(
             id_evaluacion=evaluacion, id_empleado=evaluado, tipo=tipo, defaults={'empresa_id': evaluado.empresa_id})
