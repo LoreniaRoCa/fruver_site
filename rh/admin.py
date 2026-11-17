@@ -918,8 +918,12 @@ class CamposDeNominaMixin:
     def get_readonly_fields(self, request, obj=None):
         campos = tuple(super().get_readonly_fields(request, obj))
         if obj is not None and obj.empresa_id:
-            from sincronizar_sqlserver import empresas_nomina
-            if obj.empresa_id in empresas_nomina():
+            try:
+                from sincronizar_sqlserver import empresas_nomina
+                sincronizadas = empresas_nomina()
+            except Exception:
+                sincronizadas = {}   # si el sincronizador no carga en este servidor, la pantalla se abre igual
+            if obj.empresa_id in sincronizadas:
                 campos += tuple(c for c in self.campos_nomina if c not in campos)
         return campos
 

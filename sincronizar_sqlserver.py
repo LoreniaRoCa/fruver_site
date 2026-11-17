@@ -18,7 +18,6 @@ from datetime import date
 from pathlib import Path
 
 import psycopg2
-import pyodbc
 from dotenv import load_dotenv
 from psycopg2.extras import execute_values
 
@@ -89,6 +88,7 @@ def conectar_supabase():
 
 
 def conectar_sqlserver():
+    import pyodbc  # aquí y no arriba: el portal importa este archivo (empresas_nomina) y su servidor no tiene pyodbc
     return pyodbc.connect(
         "DRIVER={SQL Server};"
         f"SERVER={os.getenv('SQL_SERVER', 'localhost')};"
@@ -127,6 +127,7 @@ def empresas_nomina():
 
 
 def conectar_nomina(base):
+    import pyodbc  # aquí y no arriba: el portal importa este archivo (empresas_nomina) y su servidor no tiene pyodbc
     return pyodbc.connect(
         "DRIVER={SQL Server};"
         f"SERVER={os.getenv('NOM_SQL_SERVER') or os.getenv('SQL_SERVER', 'localhost')};"
