@@ -390,6 +390,20 @@ class TokenAccesoEvaluacion(models.Model):
     class Meta:
         db_table = 'rh_tokenaccesoevaluacion'
 
+    def evaluacion(self):
+        """Evaluación abierta de la empresa del empleado (la de fecha final más reciente)."""
+        from django.db.models import Q
+        return (Evaluacion.objects.filter(cerrada=False)
+                .filter(Q(empresa_id=self.empleado.empresa_id) | Q(empresa__isnull=True))
+                .order_by('-fecha_final').first())
+
+    def vigente_hasta(self):
+        """Último día en que sirve el enlace: la fecha final de la evaluación abierta (None si no hay)."""
+        evaluacion = self.evaluacion()
+        return evaluacion.fecha_final if evaluacion else None
+
     def es_valido(self):
-        expiracion = self.creado_en + timezone.timedelta(days=5)
-        return not self.utilizado and timezone.now() < expiracion
+        # Sirve mientras la evaluación esté abierta, hasta el final del día de su fecha final
+        # (antes eran 5 días desde que se envió el correo)
+        hasta = self.vigente_hasta()
+        return not self.utilizado and hasta is not None and timezone.localdate() <= hasta

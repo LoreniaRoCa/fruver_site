@@ -90,6 +90,11 @@ class EmpresaActivaMiddleware:
 
             empresa = request.session.get('empresa_activa') or request.session.get('empresa_id')
             permitidas = list(empresas_permitidas(request.user).values_list('pk', flat=True))
+            # Quien entró con el enlace de su evaluación puede trabajar en la empresa de su empleado
+            # aunque no tenga accesos de empresa configurados
+            empresa_token = request.session.get('empresa_token')
+            if empresa_token and empresa_token not in permitidas:
+                permitidas.append(empresa_token)
             if empresa not in permitidas:
                 empresa = permitidas[0] if len(permitidas) == 1 else None
                 request.session['empresa_id'] = request.session['empresa_activa'] = empresa

@@ -1088,6 +1088,9 @@ def procesar_evaluaciones_loading_view(request, session_key):
                 empleado = Empleado.objects.get(id=emp_id)
                 token = TokenAccesoEvaluacion.objects.create(empleado=empleado)
                 url_acceso = f"{dominio_sitio}evaluacion/acceso/{token.id_token}/"
+                hasta = token.vigente_hasta()
+                vigencia = (f"Este enlace estará vigente hasta el {hasta.strftime('%d/%m/%Y')}, fecha de cierre de la evaluación."
+                            if hasta else "Este enlace estará vigente mientras la evaluación esté abierta.")
                 
                 asunto = "Acceso Exclusivo: Tu Evaluación de Desempeño"
                 mensaje = f"Hola {empleado.nombre_largo if hasattr(empleado, 'nombre_largo') else empleado.nombre_largo},\n\n" \
@@ -1095,7 +1098,7 @@ def procesar_evaluaciones_loading_view(request, session_key):
                           f"A través de este enlace podrás realizar tu autoevaluación (si te corresponde) y/o evaluar a tu personal a cargo.\n\n" \
                           f"Haz clic en el siguiente enlace para ingresar directamente sin necesidad de contraseña:\n" \
                           f"{url_acceso}\n\n" \
-                          f"Este enlace expirará en 5 días.\n\n" \
+                          f"{vigencia}\n\n" \
                           f"Saludos cordiales,\nRecursos Humanos."
                 
                 send_mail(
@@ -1230,11 +1233,18 @@ class PuestoEmpresaFilter(admin.RelatedFieldListFilter):
             qs = field.remote_field.model.objects.filter(**limit_choices_to).order_by('descripcion')
             return [(getattr(obj, pk_field), str(obj)) for obj in qs]
         return super().field_choices(field, request, model_admin)
-def matriz_competencias_html(queryset, guardados_ids, url_agregar=''):
+def matriz_competencias_html(queryset, guardados_ids, url_agregar='', copiar=None):
     """Competencias específicas del empleado: selector por clasificación, buscador y resumen de las seleccionadas.
     Todas las casillas se quedan en el formulario (solo se ocultan), así save_model sigue recibiendo competencias_check.
-    Al final de cada clasificación se puede dar de alta una competencia nueva (url_agregar, por AJAX)."""
+    Al final de cada clasificación se puede dar de alta una competencia nueva (url_agregar, por AJAX).
+    copiar = {'empleados': [{id, nombre, comps}], 'extras': {id: {d, c}}}: empleados del mismo puesto de los que
+    se pueden copiar las competencias (extras = las suyas que no están en la lista de este empleado)."""
+    import json
     from django.utils.html import escape
+    copiar = copiar or {'empleados': [], 'extras': {}}
+    datos_copiar = json.dumps(copiar, ensure_ascii=False).replace('<', '\\u003c').replace('>', '\\u003e').replace('&', '\\u0026')
+    opciones_copiar = ''.join(
+        f'<option value="{e["id"]}">{escape(e["nombre"])} ({len(e["comps"])})</option>' for e in copiar['empleados'])
     grupos = {}
     for comp in queryset:
         nombre = comp.id_clasificacion.descripcion if comp.id_clasificacion else "Competencias Específicas Sueltas"
@@ -1307,6 +1317,16 @@ def matriz_competencias_html(queryset, guardados_ids, url_agregar=''):
   .cmp-nueva button:disabled {{ opacity:.6; cursor:wait; }}
   .cmp-nueva small {{ flex-basis:100%; font-size:.8rem; color:#dc2626; }}
   .cmp-nueva small:empty {{ display:none; }}
+  .cmp-acciones {{ display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; margin-top:.75rem; padding-top:.75rem; border-top:1px dashed var(--cmp-borde); }}
+  .cmp-acciones select {{ flex:1; min-width:14rem; font-size:.85rem; color:var(--cmp-texto); background:var(--cmp-tarjeta);
+               border:1px solid var(--cmp-borde); border-radius:.375rem; padding:.4rem .55rem; }}
+  .cmp-btn {{ font-size:.8rem; font-weight:600; border-radius:.375rem; padding:.45rem .8rem; cursor:pointer; border:1px solid var(--cmp-borde);
+             background:var(--cmp-tarjeta); color:var(--cmp-texto); white-space:nowrap; }}
+  .cmp-btn.primario {{ background:var(--cmp-acento); border-color:var(--cmp-acento); color:#fff; }}
+  .cmp-btn.peligro:hover {{ border-color:#dc2626; color:#dc2626; }}
+  .cmp-btn:disabled {{ opacity:.5; cursor:not-allowed; }}
+  .cmp-acciones small {{ flex-basis:100%; font-size:.8rem; color:var(--cmp-tenue); }}
+  .cmp-acciones small:empty {{ display:none; }}
   .cmp-oculto {{ display:none !important; }}
   @media (max-width:640px) {{ .cmp-barra select {{ min-width:0; width:100%; }} }}
 </style>
@@ -1317,7 +1337,17 @@ def matriz_competencias_html(queryset, guardados_ids, url_agregar=''):
     <div class="cmp-sel-titulo"><span>Seleccionadas (<b id="cmp-total">0</b>)</span>
       <button type="button" id="cmp-ver-sel">Ver solo seleccionadas</button></div>
     <div class="cmp-chips" id="cmp-chips"></div>
+    <div class="cmp-acciones">
+      <select id="cmp-copiar-de" {'disabled' if not copiar['empleados'] else ''}>
+        <option value="">{'Copiar las competencias de otro empleado con el mismo puesto…' if copiar['empleados'] else 'No hay otros empleados de este puesto con competencias asignadas'}</option>
+        {opciones_copiar}
+      </select>
+      <button type="button" class="cmp-btn primario" id="cmp-copiar" disabled>Copiar competencias</button>
+      <button type="button" class="cmp-btn peligro" id="cmp-desmarcar">Desmarcar todas</button>
+      <small id="cmp-msg-acciones"></small>
+    </div>
   </div>
+  <script type="application/json" id="cmp-datos-copiar">{datos_copiar}</script>
   <div class="cmp-barra">
     <label for="cmp-clasif">Clasificación</label>
     <select id="cmp-clasif">
@@ -1428,6 +1458,54 @@ def matriz_competencias_html(queryset, guardados_ids, url_agregar=''):
   combo.addEventListener('change', function () {{ buscar.value = ''; filtrar(); }});
   buscar.addEventListener('input', filtrar);
   document.getElementById('cmp-ver-sel').onclick = function () {{ buscar.value = ''; combo.value = 'sel'; filtrar(); }};
+
+  // Copiar de otro empleado del mismo puesto / desmarcar todas (se guarda al darle Guardar)
+  var datosCopiar = JSON.parse(document.getElementById('cmp-datos-copiar').textContent);
+  var selCopiar = document.getElementById('cmp-copiar-de'), btnCopiar = document.getElementById('cmp-copiar'),
+      msgAcc = document.getElementById('cmp-msg-acciones');
+  function marcadas() {{ return Array.prototype.filter.call(casillas(), function (c) {{ return c.checked; }}).length; }}
+  function grupoPara(nombre) {{
+    var g = Array.prototype.find.call(caja.querySelectorAll('.cmp-grupo'), function (x) {{ return x.dataset.nombre === nombre; }});
+    if (g) return g;
+    // La clasificación no está en la lista de este empleado: se agrega al final
+    var n = caja.querySelectorAll('.cmp-grupo').length;
+    g = document.createElement('div'); g.className = 'cmp-grupo'; g.dataset.grupo = 'x' + n; g.dataset.nombre = nombre;
+    var h = document.createElement('h3'); h.className = 'cmp-grupo-titulo'; h.textContent = '📂 ' + nombre; g.appendChild(h);
+    document.getElementById('cmp-lista').insertBefore(g, sin);
+    var o = document.createElement('option'); o.value = g.dataset.grupo; o.dataset.nombre = nombre; combo.appendChild(o);
+    grupos = caja.querySelectorAll('.cmp-grupo');
+    return g;
+  }}
+  function casilla(id) {{
+    var cb = caja.querySelector('input[name="competencias_check"][value="' + id + '"]');
+    if (cb || !datosCopiar.extras[id]) return cb;
+    var ex = datosCopiar.extras[id], g = grupoPara(ex.c);
+    var it = document.createElement('label'); it.className = 'cmp-item'; it.dataset.texto = ex.d.toLowerCase();
+    cb = document.createElement('input'); cb.type = 'checkbox'; cb.name = 'competencias_check'; cb.value = id; cb.dataset.grupo = g.dataset.grupo;
+    var sp = document.createElement('span'); sp.textContent = ex.d;
+    it.appendChild(cb); it.appendChild(sp); g.insertBefore(it, g.querySelector('.cmp-nueva'));
+    return cb;
+  }}
+  selCopiar.addEventListener('change', function () {{ btnCopiar.disabled = !selCopiar.value; msgAcc.textContent = ''; }});
+  btnCopiar.onclick = function () {{
+    var emp = datosCopiar.empleados.find(function (e) {{ return String(e.id) === selCopiar.value; }});
+    if (!emp) return;
+    var actuales = marcadas();
+    if (actuales && !confirm('Se reemplazarán las ' + actuales + ' competencias seleccionadas por las ' + emp.comps.length +
+                             ' de ' + emp.nombre + '. ¿Continuar?')) return;
+    casillas().forEach(function (c) {{ c.checked = false; }});
+    emp.comps.forEach(function (id) {{ var cb = casilla(id); if (cb) cb.checked = true; }});
+    buscar.value = ''; combo.value = 'sel'; resumen(); filtrar();
+    msgAcc.textContent = 'Se copiaron ' + marcadas() + ' competencias de ' + emp.nombre + '. Recuerde darle Guardar.';
+  }};
+  document.getElementById('cmp-desmarcar').onclick = function () {{
+    var actuales = marcadas();
+    if (!actuales) {{ msgAcc.textContent = 'No hay competencias seleccionadas.'; return; }}
+    if (!confirm('¿Desmarcar las ' + actuales + ' competencias seleccionadas?')) return;
+    casillas().forEach(function (c) {{ c.checked = false; }});
+    resumen(); filtrar();
+    msgAcc.textContent = 'Se desmarcaron ' + actuales + ' competencias. Recuerde darle Guardar.';
+  }};
   resumen(); filtrar();
 }})();
 </script>
@@ -1490,7 +1568,8 @@ class EmpleadoAdmin(CamposDeNominaMixin, CatalogosOrdenadosAdmin, EmpresaFilterA
 
             if queryset.exists():
                 url_agregar = reverse(f'{self.admin_site.name}:rh_empleado_agregar_competencia', args=[obj.pk])
-                matriz_html = matriz_competencias_html(queryset, guardados_ids, url_agregar)
+                matriz_html = matriz_competencias_html(queryset, guardados_ids, url_agregar,
+                                                       self.competencias_para_copiar(obj, queryset))
             else:
                 matriz_html = '<div class="mt-6 bg-gray-50 dark:bg-zinc-900/40 p-4 rounded-lg border border-gray-200 dark:border-zinc-800"><p class="text-sm italic text-gray-400">No hay competencias específicas configuradas para el puesto de este empleado.</p></div>'
 
@@ -1507,6 +1586,22 @@ class EmpleadoAdmin(CamposDeNominaMixin, CatalogosOrdenadosAdmin, EmpresaFilterA
         )
         
         return super().change_view(request, object_id, form_url, extra_context=extra_context)
+
+    def competencias_para_copiar(self, obj, queryset):
+        """Empleados de la misma empresa y puesto que ya tienen competencias asignadas, con sus competencias."""
+        asignadas = {}
+        for emp_id, comp_id in EmpleadoCompetenciaAsignada.objects.filter(
+                id_empleado__empresa_id=obj.empresa_id, id_empleado__id_puesto_id=obj.id_puesto_id
+        ).exclude(id_empleado_id=obj.pk).values_list('id_empleado_id', 'id_competencia_id'):
+            asignadas.setdefault(emp_id, []).append(comp_id)
+        empleados = [{'id': e.pk, 'nombre': e.nombre_largo, 'comps': sorted(asignadas[e.pk])}
+                     for e in Empleado.objects.filter(pk__in=asignadas).order_by('nombre_largo')]
+        en_lista = set(queryset.values_list('id_competencia', flat=True))
+        faltan = {c for comps in asignadas.values() for c in comps} - en_lista
+        extras = {c.id_competencia: {'d': c.descripcion,
+                                     'c': c.id_clasificacion.descripcion if c.id_clasificacion else 'Competencias Específicas Sueltas'}
+                  for c in Competencia.objects.filter(id_competencia__in=faltan).select_related('id_clasificacion')}
+        return {'empleados': empleados, 'extras': extras}
 
     def get_urls(self):
         propias = [

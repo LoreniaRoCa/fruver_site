@@ -1125,21 +1125,28 @@ def exportar_competencias_excel(request):
 def acceso_magico_view(request, token_uuid):
     token = get_object_or_404(TokenAccesoEvaluacion, id_token=token_uuid)
     
-    if token.es_valido():
-        # Obtener el usuario de Django ligado a ese empleado
-        usuario_django = token.empleado.user 
-        
-        if usuario_django:
-            # 🌟 El truco: Iniciar sesión en Django sin pedir contraseña
-            usuario_django.backend = 'django.contrib.auth.backends.ModelBackend'
-            login(request, usuario_django)
-            
-            # 🌟 MARCA DE SESIÓN: Indicamos que el usuario ingresó por enlace mágico de evaluación
-            request.session['acceso_por_token'] = True
-            return redirect('panel_evaluacion') # 👈 Ruta de tu panel de evaluaciones
-            
-    # 🌟 Si el token expiró o falló, redirigimos al login del admin personalizado usando su namespace correcto
-    messages.error(request, "El enlace de acceso ya no es válido o ha expirado.")
+    usuario_django = token.empleado.user
+    if token.es_valido() and usuario_django and usuario_django.is_active:
+        # 🌟 El truco: Iniciar sesión en Django sin pedir contraseña (si ya había otra sesión, se reemplaza)
+        usuario_django.backend = 'django.contrib.auth.backends.ModelBackend'
+        login(request, usuario_django)
+
+        # 🌟 MARCA DE SESIÓN: Indicamos que el usuario ingresó por enlace mágico de evaluación
+        request.session['acceso_por_token'] = True
+        # Entra directo a la empresa del empleado, sin pedirle que la elija (aunque tenga acceso a varias)
+        empresa = token.empleado.empresa_id
+        request.session['empresa_token'] = empresa
+        request.session['empresa_id'] = request.session['empresa_activa'] = empresa
+        return redirect('panel_evaluacion') # 👈 Ruta de tu panel de evaluaciones
+
+    # 🌟 Si el token no sirve, se explica por qué y se manda al login
+    hasta = token.vigente_hasta()
+    if not usuario_django or not usuario_django.is_active:
+        messages.error(request, "Tu registro de empleado no tiene un usuario activo del sistema. Comunícate con Recursos Humanos.")
+    elif hasta is None:
+        messages.error(request, "No hay una evaluación de desempeño abierta en este momento.")
+    else:
+        messages.error(request, f"El enlace de acceso venció el {hasta.strftime('%d/%m/%Y')}, fecha de cierre de la evaluación.")
     return redirect('admin:login')
 
 @login_required
