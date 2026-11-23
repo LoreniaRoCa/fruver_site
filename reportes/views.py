@@ -84,7 +84,10 @@ def ejecutar_consulta_reporte(reporte, empresa_id, fecha_inicio, fecha_fin):
 
 
 def usuario_puede_ver_reporte(user, reporte):
-    """Valida permiso_codename del reporte (ej. 'ver_ventas_pivot' o 'reportes.ver_ventas_pivot')."""
+    """Valida que el reporte se use en la empresa activa (Pivot_Dinamico.empresas) y su permiso_codename
+    (ej. 'ver_ventas_pivot' o 'reportes.ver_ventas_pivot')."""
+    if not reporte.permitido_en(getattr(user, '_empresa_activa', None)):
+        return False
     codename = (reporte.permiso_codename or "").strip()
     if not codename:
         return True

@@ -3,6 +3,22 @@ from django.shortcuts import redirect
 from rh.admin import admin_site  # Mantenemos el registro del admin_site personalizado
 from .models import ModuloSistema, OpcionModulo
 
+# Opciones del menú que no se llaman como su reporte (el tablero usa los datos del Proceso de maquila)
+REPORTE_DE_OPCION = {'tablero-maquila': 'proceso-maquila'}
+
+
+def opcion_permitida_en_empresa(link, empresa):
+    """Las opciones '...?open=<reporte>' se muestran solo en las empresas configuradas en ese reporte."""
+    import re
+    m = re.search(r'[?&]open=([\w-]+)', link or '')
+    if not m:
+        return True
+    from reportes.models import Pivot_Dinamico
+    slug = REPORTE_DE_OPCION.get(m.group(1), m.group(1))
+    reporte = Pivot_Dinamico.objects.filter(slug=slug).only('empresas').first()
+    return reporte is None or reporte.permitido_en(empresa)
+
+
 class NavegacionDinamicaMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
@@ -38,6 +54,10 @@ class NavegacionDinamicaMiddleware:
                     cod_permiso = f"{op.permiso_requerido.content_type.app_label}.{op.permiso_requerido.codename}"
                     if not request.user.has_perm(cod_permiso):
                         continue  # Oculta la opción si no tiene el permiso
+
+                # 2b. Opciones que abren un reporte: solo en las empresas donde se usa ese reporte
+                if not opcion_permitida_en_empresa(op.link, getattr(request.user, '_empresa_activa', None)):
+                    continue
 
                 # 3. Clasificar dentro del grupo correspondiente
                 nombre_grupo = op.grupo if op.grupo else "Navegación del Módulo"

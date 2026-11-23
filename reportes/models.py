@@ -28,8 +28,25 @@ class Pivot_Dinamico(models.Model):
         help_text="Codename registrado en auth_permission (ej. ver_inventario_pivot). Dejar vacío si es público."
     )
         
+    # Empresas en las que aparece el reporte (para todos los usuarios, también los administradores)
+    empresas = models.CharField(
+        max_length=200,
+        blank=True,
+        default='',
+        verbose_name="Empresas",
+        help_text="Claves de las empresas donde aparece, separadas por coma (ej. FRUIM,FRUSA,PEMSA). Vacío = todas."
+    )
+
     activo = models.BooleanField(default=True, verbose_name="¿Activo?")
     orden = models.IntegerField(default=0, verbose_name="Orden en el Menú")
+
+    def lista_empresas(self):
+        return [e.strip().upper() for e in (self.empresas or '').split(',') if e.strip()]
+
+    def permitido_en(self, empresa):
+        """True si el reporte se usa en esa empresa (sin empresas configuradas, en todas)."""
+        empresas = self.lista_empresas()
+        return not empresas or str(empresa or '').upper() in empresas
 
     class Meta:
         verbose_name = "Reporte Dinámico"
