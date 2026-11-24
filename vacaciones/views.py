@@ -59,7 +59,6 @@ def puede_ver_solicitud(user, yo, solicitud):
         return False
     return solicitud.empleado_id == yo.pk or solicitud.empleado.id_jefe_id == yo.pk
 
-
 def parse_fecha(valor):
     try:
         return datetime.strptime(valor or '', '%Y-%m-%d').date()

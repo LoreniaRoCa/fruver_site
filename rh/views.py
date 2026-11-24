@@ -505,13 +505,13 @@ def resumen_evaluaciones_view(request):
                 gratificacion = "Sin evaluar"
             elif promedio_auto == 0 or promedio_jefe == 0:
                 gratificacion = "Incompleta"
-            elif 1.0 <= promedio_jefe <= 1.5:
+            elif 1.0 <= promedio_jefe < 1.6:
                 gratificacion = "0"
-            elif 1.6 <= promedio_jefe <= 1.9:
+            elif 1.6 <= promedio_jefe < 2:
                 gratificacion = "15 días"
-            elif 2.0 <= promedio_jefe <= 2.9:
+            elif 2.0 <= promedio_jefe < 3:
                 gratificacion = "1 mes"
-            elif 3.0 <= promedio_jefe <= 3.9:
+            elif 3.0 <= promedio_jefe < 4:
                 gratificacion = "2 meses"
             elif 4.0 <= promedio_jefe <= 5.0:
                 gratificacion = "3 meses"
@@ -671,13 +671,13 @@ def exportar_resumen_excel(request):
                 gratificacion = "Sin evaluar"
             elif promedio_auto == 0 or promedio_jefe == 0:
                 gratificacion = "Incompleta"                    
-            elif 1.0 <= promedio_jefe <= 1.5:
+            elif 1.0 <= promedio_jefe < 1.6:
                 gratificacion = "0"
-            elif 1.6 <= promedio_jefe <= 1.9:
+            elif 1.6 <= promedio_jefe < 2:
                 gratificacion = "15 días"
-            elif 2.0 <= promedio_jefe <= 2.9:
+            elif 2.0 <= promedio_jefe < 3:
                 gratificacion = "1 mes"
-            elif 3.0 <= promedio_jefe <= 3.9:
+            elif 3.0 <= promedio_jefe < 4:
                 gratificacion = "2 meses"
             elif 4.0 <= promedio_jefe <= 5.0:
                 gratificacion = "3 meses"
